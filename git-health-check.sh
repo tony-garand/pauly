@@ -16,6 +16,7 @@ main() {
     local report=""
     local issues_found=0
     local repos_checked=0
+    local repos_pulled=0
 
     # Find all git repositories
     while IFS= read -r git_dir; do
@@ -65,8 +66,19 @@ main() {
 
         local behind=$(git rev-list --count HEAD..origin/$main_branch 2>/dev/null || echo 0)
         if [ "$behind" -gt 0 ]; then
-            repo_issues+="  - $behind commits behind origin/$main_branch\n"
-            issues_found=$((issues_found + 1))
+            # Auto-pull if working directory is clean
+            if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
+                if git pull --quiet 2>/dev/null; then
+                    repo_issues+="  - Pulled $behind commits from origin/$main_branch\n"
+                    repos_pulled=$((repos_pulled + 1))
+                else
+                    repo_issues+="  - $behind commits behind origin/$main_branch (pull failed)\n"
+                    issues_found=$((issues_found + 1))
+                fi
+            else
+                repo_issues+="  - $behind commits behind origin/$main_branch (has local changes)\n"
+                issues_found=$((issues_found + 1))
+            fi
         fi
 
         # Add to report if issues found
@@ -80,6 +92,7 @@ main() {
     local summary="Git Health Check - $(date '+%Y-%m-%d')
 ========================================
 Repositories scanned: $repos_checked
+Repositories pulled: $repos_pulled
 Issues found: $issues_found
 "
 
@@ -103,7 +116,7 @@ $summary" 2>/dev/null)
     # Send email
     send_email "Git Health Check - $issues_found issues" "$(echo -e "$summary")"
 
-    log "Git Health Check complete. $repos_checked repos scanned, $issues_found issues found."
+    log "Git Health Check complete. $repos_checked repos scanned, $repos_pulled pulled, $issues_found issues found."
 }
 
 run_with_alerts "git-health-check" main
