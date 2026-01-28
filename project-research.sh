@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 PROJECTS_DIR="$HOME/Projects"
-RESEARCH_CACHE="$PROJECT_DIR/cache/research"
+RESEARCH_CACHE="$SCRIPT_DIR/cache/research"
 
 mkdir -p "$RESEARCH_CACHE"
 

@@ -136,7 +136,7 @@ host           $SMTP_HOST
 port           $SMTP_PORT
 from           $EMAIL
 user           $SMTP_USER
-password       $SMTP_PASSWORD
+password       "$SMTP_PASSWORD"
 EOF
 
     chmod 600 "$MSMTP_CONFIG"
