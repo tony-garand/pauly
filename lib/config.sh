@@ -31,6 +31,12 @@ DEFAULT_DEV_PROJECT_DIR=""
 DEFAULT_GITHUB_TASKS_REPO=""
 DEFAULT_GITHUB_TASKS_LABEL="pauly"
 
+# Auto-fix defaults
+DEFAULT_AUTOFIX_ENABLED="false"
+DEFAULT_AUTOFIX_SCRIPTS="all"
+DEFAULT_AUTOFIX_MAX_ATTEMPTS=1
+DEFAULT_AUTOFIX_BRANCH_PREFIX="autofix"
+
 # Config files
 MSMTP_CONFIG="$HOME/.msmtprc"
 
@@ -70,6 +76,12 @@ load_config() {
     # GitHub tasks defaults
     GITHUB_TASKS_REPO="${DEFAULT_GITHUB_TASKS_REPO}"
     GITHUB_TASKS_LABEL="${DEFAULT_GITHUB_TASKS_LABEL}"
+
+    # Auto-fix defaults
+    AUTOFIX_ENABLED="${DEFAULT_AUTOFIX_ENABLED}"
+    AUTOFIX_SCRIPTS="${DEFAULT_AUTOFIX_SCRIPTS}"
+    AUTOFIX_MAX_ATTEMPTS="${DEFAULT_AUTOFIX_MAX_ATTEMPTS}"
+    AUTOFIX_BRANCH_PREFIX="${DEFAULT_AUTOFIX_BRANCH_PREFIX}"
 
     # Load from file if exists
     if [ -f "$CONFIG_FILE" ]; then
@@ -115,6 +127,12 @@ DEV_PROJECT_DIR="$DEV_PROJECT_DIR"
 # GitHub Tasks Configuration
 GITHUB_TASKS_REPO="$GITHUB_TASKS_REPO"
 GITHUB_TASKS_LABEL="$GITHUB_TASKS_LABEL"
+
+# Auto-Fix Configuration
+AUTOFIX_ENABLED="$AUTOFIX_ENABLED"
+AUTOFIX_SCRIPTS="$AUTOFIX_SCRIPTS"
+AUTOFIX_MAX_ATTEMPTS=$AUTOFIX_MAX_ATTEMPTS
+AUTOFIX_BRANCH_PREFIX="$AUTOFIX_BRANCH_PREFIX"
 EOF
 
     chmod 600 "$CONFIG_FILE"
@@ -302,6 +320,25 @@ run_config_wizard() {
         fi
     fi
 
+    # Auto-Fix Configuration
+    if prompt_yes_no "Enable auto-fix? (creates PRs for code bugs when jobs fail)" "n"; then
+        AUTOFIX_ENABLED="true"
+        echo ""
+        echo "Auto-Fix Configuration"
+        echo "----------------------"
+        echo "When a job fails, Pauly will analyze the error and attempt to"
+        echo "create a PR with a fix if it detects a code bug."
+        echo ""
+        echo "Which scripts can trigger auto-fix?"
+        echo "  'all' = all scripts, or comma-separated list (e.g., 'daily-claude-summary.sh,git-health-check.sh')"
+        AUTOFIX_SCRIPTS=$(prompt_value "Scripts" "$AUTOFIX_SCRIPTS")
+        AUTOFIX_MAX_ATTEMPTS=$(prompt_value "Max fix attempts per failure" "$AUTOFIX_MAX_ATTEMPTS")
+        AUTOFIX_BRANCH_PREFIX=$(prompt_value "Branch prefix" "$AUTOFIX_BRANCH_PREFIX")
+        echo ""
+    else
+        AUTOFIX_ENABLED="false"
+    fi
+
     # Advanced settings
     if prompt_yes_no "Configure advanced settings?" "n"; then
         echo ""
@@ -390,6 +427,17 @@ show_config() {
         echo ""
         echo "Monitoring:"
         echo "  Healthcheck:  $HEALTHCHECK_URL"
+    fi
+
+    echo ""
+    echo "Auto-Fix:"
+    if [ "${AUTOFIX_ENABLED:-false}" = "true" ]; then
+        echo "  Enabled:      yes"
+        echo "  Scripts:      $AUTOFIX_SCRIPTS"
+        echo "  Max attempts: $AUTOFIX_MAX_ATTEMPTS"
+        echo "  Branch:       $AUTOFIX_BRANCH_PREFIX/<script>-<timestamp>"
+    else
+        echo "  Enabled:      no"
     fi
 }
 

@@ -10,6 +10,9 @@ PAULY_DIR="$(dirname "$PAULY_LIB_DIR")"
 # Load configuration
 source "$PAULY_LIB_DIR/config.sh"
 
+# Load autofix module
+source "$PAULY_LIB_DIR/autofix.sh" 2>/dev/null || true
+
 # Set up directories
 LOG_DIR="$PAULY_DIR/logs"
 
@@ -143,6 +146,11 @@ run_with_alerts() {
             # Ping healthcheck failure endpoint if configured
             if [ -n "${HEALTHCHECK_URL:-}" ]; then
                 curl -fsS -m 10 --retry 5 -o /dev/null "$HEALTHCHECK_URL/fail" || true
+            fi
+
+            # Attempt auto-fix if available and enabled
+            if type run_autofix &>/dev/null; then
+                run_autofix "$script_name" "Exit code: $exit_code" "$log_tail" || true
             fi
 
             return $exit_code
