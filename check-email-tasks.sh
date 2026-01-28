@@ -134,20 +134,28 @@ main() {
     trap "rm -rf $temp_dir" EXIT
 
     # Fetch unread emails with task prefix using Python (more reliable than curl for IMAP)
-    python3 << PYTHON_SCRIPT
+    # Pass credentials via environment to avoid escaping issues
+    IMAP_HOST="$IMAP_HOST" \
+    IMAP_PORT="$IMAP_PORT" \
+    IMAP_USER="$IMAP_USER" \
+    IMAP_PASSWORD="$IMAP_PASSWORD" \
+    ALLOWED_SENDERS="$ALLOWED_SENDERS" \
+    TASK_SUBJECT_PREFIX="$TASK_SUBJECT_PREFIX" \
+    TEMP_DIR="$temp_dir" \
+    python3 << 'PYTHON_SCRIPT'
 import imaplib
 import email
 from email.header import decode_header
 import os
 import sys
 
-imap_host = "$IMAP_HOST"
-imap_port = $IMAP_PORT
-username = "$IMAP_USER"
-password = "$IMAP_PASSWORD"
-allowed_senders = "$ALLOWED_SENDERS".lower().split(",")
-subject_prefix = "$TASK_SUBJECT_PREFIX"
-temp_dir = "$temp_dir"
+imap_host = os.environ.get("IMAP_HOST", "imap.gmail.com")
+imap_port = int(os.environ.get("IMAP_PORT", "993"))
+username = os.environ.get("IMAP_USER", "")
+password = os.environ.get("IMAP_PASSWORD", "")
+allowed_senders = os.environ.get("ALLOWED_SENDERS", "").lower().split(",")
+subject_prefix = os.environ.get("TASK_SUBJECT_PREFIX", "[PAULY]")
+temp_dir = os.environ.get("TEMP_DIR", "/tmp")
 
 try:
     # Connect to IMAP
