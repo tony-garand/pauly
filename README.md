@@ -5,14 +5,14 @@ A CLI tool for running automated AI-powered tasks on a dedicated Mac Mini (or an
 ## Quick Start
 
 ```bash
-# Run setup (configures everything)
-sudo ./setup-mac-mini.sh
-
 # Add CLI to PATH
 sudo ln -sf ~/Projects/pauly/pauly /usr/local/bin/pauly
 
-# Configure email (required for notifications)
-nano ~/.msmtprc  # Add your Gmail app password
+# Configure Pauly (interactive prompts)
+pauly config
+
+# Run Mac Mini setup (for dedicated server)
+pauly setup
 
 # Test it
 pauly test-email
@@ -30,7 +30,8 @@ pauly enable <job>      Enable a scheduled job
 pauly disable <job>     Disable a scheduled job
 pauly test-email        Send a test email
 pauly setup             Run Mac Mini setup
-pauly config            Edit configuration
+pauly config            Configure settings interactively
+pauly config show       Show current configuration
 ```
 
 ## Scheduled Jobs
@@ -58,17 +59,20 @@ pauly tail
 
 ```
 pauly/
-├── pauly                    # CLI tool
+├── pauly                           # CLI tool
 ├── daily-claude-summary.sh         # Daily activity summary
 ├── git-health-check.sh             # Git repo health check
 ├── project-research.sh             # Competitive analysis
 ├── setup-mac-mini.sh               # Full Mac setup script
 ├── lib/
-│   └── common.sh                   # Shared functions
+│   ├── common.sh                   # Shared functions
+│   └── config.sh                   # Configuration management
 ├── logs/                           # Log files (auto-rotated)
 ├── cache/
 │   └── research/                   # Cached research results
 └── com.user.*.plist                # launchd job configs
+
+~/.config/pauly/config              # User configuration (created by 'pauly config')
 ```
 
 ## Features
@@ -114,12 +118,22 @@ Generate an app password at: https://myaccount.google.com/apppasswords
 
 ## Configuration
 
-Edit settings in `lib/common.sh`:
+Run the interactive configuration wizard:
 
 ```bash
-EMAIL="your-email@gmail.com"      # Notification email
-MAX_LOG_SIZE_MB=10                # Log rotation threshold
-MAX_LOG_FILES=5                   # Number of rotated logs to keep
+pauly config
+```
+
+This will prompt you for:
+- **Email** - Where to send notifications and alerts
+- **Projects directory** - Where your git repos live
+- **Advanced settings** - Log rotation, healthcheck URL
+
+Configuration is stored in `~/.config/pauly/config`.
+
+To view current settings:
+```bash
+pauly config show
 ```
 
 ## Troubleshooting

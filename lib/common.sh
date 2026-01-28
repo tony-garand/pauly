@@ -1,14 +1,17 @@
 #!/bin/bash
 
-# Common functions for AI Assistant scripts
+# Common functions for Pauly scripts
 # Source this file: source "$(dirname "$0")/lib/common.sh"
 
-# Configuration
-EMAIL="anesthetics1@gmail.com"
-PROJECT_DIR="$HOME/Projects/ai-assistant"
-LOG_DIR="$PROJECT_DIR/logs"
-MAX_LOG_SIZE_MB=10
-MAX_LOG_FILES=5
+# Get the directory where this script lives
+PAULY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PAULY_DIR="$(dirname "$PAULY_LIB_DIR")"
+
+# Load configuration
+source "$PAULY_LIB_DIR/config.sh"
+
+# Set up directories
+LOG_DIR="$PAULY_DIR/logs"
 
 # Ensure log directory exists
 mkdir -p "$LOG_DIR"
@@ -99,7 +102,7 @@ $error_message
 $log_tail"
     fi
 
-    send_email "AI Assistant Failure: $script_name" "$body" "high"
+    send_email "Pauly Failure: $script_name" "$body" "high"
 }
 
 # ==========================================

@@ -6,6 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/common.sh" 2>/dev/null || true
 
 VERSION="1.0.0"
@@ -62,7 +63,8 @@ cmd_help() {
     echo "  ${BOLD}disable${NC} <job>    Disable a scheduled job"
     echo "  ${BOLD}test-email${NC}       Send a test email"
     echo "  ${BOLD}setup${NC}            Run the Mac Mini setup script"
-    echo "  ${BOLD}config${NC}           Edit configuration"
+    echo "  ${BOLD}config${NC}           Configure settings interactively"
+    echo "  ${BOLD}config show${NC}      Show current configuration"
     echo "  ${BOLD}version${NC}          Show version"
     echo "  ${BOLD}help${NC}             Show this help message"
     echo ""
@@ -122,15 +124,27 @@ cmd_status() {
     done
 
     echo ""
-    echo -e "${BOLD}Email Configuration:${NC}"
-    if [ -f "$HOME/.msmtprc" ]; then
-        if grep -q "YOUR_EMAIL" "$HOME/.msmtprc" 2>/dev/null; then
-            print_warning "Email not configured (edit ~/.msmtprc)"
-        else
-            print_success "Email configured"
+    echo -e "${BOLD}Configuration:${NC}"
+    if config_exists; then
+        echo "  Email:    ${EMAIL:-<not set>}"
+        echo "  Projects: ${PROJECTS_DIR:-$HOME/Projects}"
+        if [ -n "$HEALTHCHECK_URL" ]; then
+            echo "  Healthcheck: configured"
         fi
     else
-        print_error "Email not configured (run: pauly setup)"
+        print_warning "Not configured (run: pauly config)"
+    fi
+
+    echo ""
+    echo -e "${BOLD}Email Setup:${NC}"
+    if [ -f "$HOME/.msmtprc" ]; then
+        if grep -q "YOUR_EMAIL\|YOUR_APP_PASSWORD" "$HOME/.msmtprc" 2>/dev/null; then
+            print_warning "SMTP not configured (edit ~/.msmtprc)"
+        else
+            print_success "SMTP configured"
+        fi
+    else
+        print_warning "SMTP not configured (run: pauly setup)"
     fi
 }
 
@@ -391,9 +405,14 @@ cmd_disable() {
 }
 
 cmd_test_email() {
+    if [ -z "$EMAIL" ]; then
+        print_error "Email not configured. Run 'pauly config' first."
+        exit 1
+    fi
+
     print_info "Sending test email to $EMAIL..."
 
-    if echo "This is a test email from your Pauly setup." | mail -s "Pauly Test - $(date '+%Y-%m-%d %H:%M')" "$EMAIL" 2>/dev/null; then
+    if echo "This is a test email from your Pauly setup on $(hostname)." | mail -s "Pauly Test - $(date '+%Y-%m-%d %H:%M')" "$EMAIL" 2>/dev/null; then
         print_success "Test email sent to $EMAIL"
     else
         print_error "Failed to send email. Check your ~/.msmtprc configuration."
@@ -408,19 +427,21 @@ cmd_setup() {
 }
 
 cmd_config() {
-    local config_file="$SCRIPT_DIR/lib/common.sh"
+    local subcommand="$1"
 
-    if [ -n "$EDITOR" ]; then
-        $EDITOR "$config_file"
-    elif command -v nano &> /dev/null; then
-        nano "$config_file"
-    elif command -v vim &> /dev/null; then
-        vim "$config_file"
-    else
-        print_error "No editor found. Set \$EDITOR or install nano/vim."
-        echo "Config file: $config_file"
-        exit 1
-    fi
+    case "$subcommand" in
+        show|view)
+            show_config
+            ;;
+        ""|set|edit)
+            run_config_wizard
+            ;;
+        *)
+            print_error "Unknown config command: $subcommand"
+            echo "Usage: pauly config [show]"
+            exit 1
+            ;;
+    esac
 }
 
 # ==========================================
@@ -453,7 +474,7 @@ case "${1:-help}" in
         cmd_setup
         ;;
     config|configure)
-        cmd_config
+        cmd_config "$2"
         ;;
     version|--version|-v)
         cmd_version
