@@ -28,7 +28,7 @@ pauly setup             Run full setup wizard
 
 ## Autonomous Development Mode
 
-Pauly includes an autonomous development system that runs a PLAN -> EXECUTE -> REVIEW -> FIX loop to build projects from idea files.
+Pauly includes an autonomous development system that runs a PLAN -> EXECUTE -> REVIEW -> FIX loop to build projects from idea files. Inspired by [bjarne](https://github.com/Dekadinious/bjarne)
 
 ### Dev Commands
 
