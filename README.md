@@ -177,7 +177,7 @@ Create issues in a GitHub repo to trigger tasks. Results are posted as comments.
 
 ### Setup
 
-1. Create a repo for tasks (e.g., `your-username/pauly-tasks`)
+1. Create a repo for tasks (e.g., `your-username/pauly-tasks`) - can be private
 2. Run `pauly config` and enable GitHub Issues tasks
 3. Enable the tasks job: `pauly enable tasks`
 4. Authenticate GitHub CLI: `gh auth login`
