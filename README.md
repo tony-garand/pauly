@@ -119,9 +119,10 @@ pauly config
 ```
 
 This will prompt you for:
-- **Email** - Where to send notifications and alerts
+- **Send to** - Email address to receive notifications and alerts
+- **Send from** - Gmail/SMTP account to send emails from (can be same as above)
 - **Projects directory** - Where your git repos live
-- **SMTP settings** - Host, port, username, and app password
+- **SMTP settings** - Host, port, and app password
 - **Advanced settings** - Log rotation, healthcheck URL
 
 ### Gmail Setup

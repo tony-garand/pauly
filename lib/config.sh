@@ -209,8 +209,8 @@ run_config_wizard() {
     load_config
 
     # Email
-    echo "Email address for notifications and alerts."
-    EMAIL=$(prompt_value "Email" "$EMAIL")
+    echo "Email address to RECEIVE notifications and alerts."
+    EMAIL=$(prompt_value "Send notifications to" "$EMAIL")
     echo ""
 
     # Projects directory
@@ -219,8 +219,8 @@ run_config_wizard() {
     echo ""
 
     # SMTP Configuration
-    echo "SMTP Configuration (for sending emails)"
-    echo "----------------------------------------"
+    echo "SMTP Configuration (account to SEND emails from)"
+    echo "-------------------------------------------------"
     echo "Default is Gmail. Get an app password at:"
     echo "https://myaccount.google.com/apppasswords"
     echo ""
@@ -230,7 +230,7 @@ run_config_wizard() {
 
     # Default SMTP user to email if not set
     local smtp_user_default="${SMTP_USER:-$EMAIL}"
-    SMTP_USER=$(prompt_value "SMTP username" "$smtp_user_default")
+    SMTP_USER=$(prompt_value "Send from (email)" "$smtp_user_default")
 
     # Password prompt (hidden input)
     if [ -n "$SMTP_PASSWORD" ]; then
@@ -321,11 +321,10 @@ run_config_wizard() {
 
     # Show summary
     echo "Current settings:"
-    echo "  Email:        $EMAIL"
-    echo "  Projects:     $PROJECTS_DIR"
+    echo "  Send to:      $EMAIL"
+    echo "  Send from:    $SMTP_USER"
     echo "  SMTP host:    $SMTP_HOST:$SMTP_PORT"
-    echo "  SMTP user:    $SMTP_USER"
-    echo "  SMTP pass:    ****"
+    echo "  Projects:     $PROJECTS_DIR"
     echo "  Log size:     ${MAX_LOG_SIZE_MB}MB"
     echo "  Log files:    $MAX_LOG_FILES"
     if [ -n "$HEALTHCHECK_URL" ]; then
@@ -345,12 +344,12 @@ show_config() {
     echo "Configuration: $CONFIG_FILE"
     echo ""
     echo "General:"
-    echo "  Email:        ${EMAIL:-<not set>}"
+    echo "  Send to:      ${EMAIL:-<not set>}"
     echo "  Projects:     $PROJECTS_DIR"
     echo ""
-    echo "SMTP:"
+    echo "SMTP (send from):"
     echo "  Host:         $SMTP_HOST:$SMTP_PORT"
-    echo "  User:         ${SMTP_USER:-<not set>}"
+    echo "  From:         ${SMTP_USER:-<not set>}"
     echo "  Password:     ${SMTP_PASSWORD:+****}"
     echo "  Config:       $MSMTP_CONFIG"
     echo ""
