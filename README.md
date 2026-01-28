@@ -192,6 +192,20 @@ Pauly will:
 2. Execute the task via Claude
 3. Reply with the results
 
+### Dev Mode via Email
+
+You can trigger autonomous development via email:
+
+| Subject | Body | Action |
+|---------|------|--------|
+| `[PAULY] dev init` | Project idea/description | Creates new project and initializes CONTEXT.md + TASKS.md |
+| `[PAULY] dev task` | Task description | Runs isolated task mode |
+| `[PAULY] dev 10` | (optional notes) | Runs 10 iterations of the dev loop |
+| `[PAULY] dev` | (optional notes) | Runs default 25 iterations |
+| `[PAULY] dev status` | - | Returns current development progress |
+
+To enable, run `pauly config` and set a **Dev project directory** when prompted.
+
 ### Security
 
 - Only emails from allowed senders are processed (configured during setup)

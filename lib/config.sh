@@ -24,6 +24,9 @@ DEFAULT_IMAP_PORT=993
 DEFAULT_ALLOWED_SENDERS=""
 DEFAULT_TASK_SUBJECT_PREFIX="[PAULY]"
 
+# Dev mode defaults
+DEFAULT_DEV_PROJECT_DIR=""
+
 # Config files
 MSMTP_CONFIG="$HOME/.msmtprc"
 
@@ -56,6 +59,9 @@ load_config() {
     IMAP_PORT="${DEFAULT_IMAP_PORT}"
     ALLOWED_SENDERS="${DEFAULT_ALLOWED_SENDERS}"
     TASK_SUBJECT_PREFIX="${DEFAULT_TASK_SUBJECT_PREFIX}"
+
+    # Dev mode defaults
+    DEV_PROJECT_DIR="${DEFAULT_DEV_PROJECT_DIR}"
 
     # Load from file if exists
     if [ -f "$CONFIG_FILE" ]; then
@@ -94,6 +100,9 @@ IMAP_HOST="$IMAP_HOST"
 IMAP_PORT=$IMAP_PORT
 ALLOWED_SENDERS="$ALLOWED_SENDERS"
 TASK_SUBJECT_PREFIX="$TASK_SUBJECT_PREFIX"
+
+# Dev Mode Configuration
+DEV_PROJECT_DIR="$DEV_PROJECT_DIR"
 EOF
 
     chmod 600 "$CONFIG_FILE"
@@ -241,6 +250,13 @@ run_config_wizard() {
 
         TASK_SUBJECT_PREFIX=$(prompt_value "Task subject prefix" "$TASK_SUBJECT_PREFIX")
         echo ""
+
+        echo "Dev Mode via Email"
+        echo "------------------"
+        echo "To use 'pauly dev' commands via email, specify the project directory."
+        echo "Leave empty to disable email-triggered dev mode."
+        DEV_PROJECT_DIR=$(prompt_value "Dev project directory" "$DEV_PROJECT_DIR")
+        echo ""
     fi
 
     # Advanced settings
@@ -316,6 +332,9 @@ show_config() {
         echo "  IMAP:         $IMAP_HOST:$IMAP_PORT"
         echo "  Allowed:      $ALLOWED_SENDERS"
         echo "  Prefix:       $TASK_SUBJECT_PREFIX"
+        if [ -n "$DEV_PROJECT_DIR" ]; then
+            echo "  Dev project:  $DEV_PROJECT_DIR"
+        fi
     fi
 
     if [ -n "$HEALTHCHECK_URL" ]; then

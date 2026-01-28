@@ -14,6 +14,110 @@ IMAP_PASSWORD="${SMTP_PASSWORD}"
 ALLOWED_SENDERS="${ALLOWED_SENDERS:-$EMAIL}"
 TASK_SUBJECT_PREFIX="${TASK_SUBJECT_PREFIX:-[PAULY]}"
 
+# Process dev commands from email
+# Usage: process_dev_command "dev init" "idea content" "/tmp/dir"
+process_dev_command() {
+    local cmd="$1"
+    local body="$2"
+    local temp_dir="$3"
+
+    # Parse the dev subcommand
+    local subcmd=$(echo "$cmd" | awk '{print $2}')
+    local args=$(echo "$cmd" | cut -d' ' -f3-)
+
+    case "$subcmd" in
+        init)
+            # Create idea file from email body and run init
+            local idea_file="$temp_dir/idea.md"
+            echo "$body" > "$idea_file"
+
+            log "Running: pauly dev init (from email)"
+            cd "${PROJECTS_DIR:-$HOME/Projects}"
+
+            # Create project directory from first line of idea
+            local project_name=$(echo "$body" | head -1 | tr -dc '[:alnum:] ' | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | cut -c1-30)
+            [ -z "$project_name" ] && project_name="email-project-$(date +%s)"
+
+            mkdir -p "$project_name"
+            cd "$project_name"
+
+            "$SCRIPT_DIR/pauly" dev init "$idea_file" 2>&1
+            echo ""
+            echo "Project initialized at: $(pwd)"
+            echo "Run 'pauly dev' in this directory to start building."
+            ;;
+
+        task)
+            # Run isolated task mode with body as description
+            local task_desc="${body:-$args}"
+            log "Running: pauly dev task (from email)"
+
+            # Need to be in a project directory
+            if [ -n "$DEV_PROJECT_DIR" ] && [ -d "$DEV_PROJECT_DIR" ]; then
+                cd "$DEV_PROJECT_DIR"
+            else
+                echo "Error: No project directory configured for dev tasks."
+                echo "Set DEV_PROJECT_DIR in your config or include the project path in your email."
+                return 1
+            fi
+
+            "$SCRIPT_DIR/pauly" dev task "$task_desc" 2>&1
+            ;;
+
+        status|st)
+            # Show dev status
+            if [ -n "$DEV_PROJECT_DIR" ] && [ -d "$DEV_PROJECT_DIR" ]; then
+                cd "$DEV_PROJECT_DIR"
+            fi
+            "$SCRIPT_DIR/pauly" dev status 2>&1
+            ;;
+
+        [0-9]*)
+            # Run N iterations: "dev 10" -> run 10 iterations
+            local iterations="$subcmd"
+            log "Running: pauly dev $iterations (from email)"
+
+            if [ -n "$DEV_PROJECT_DIR" ] && [ -d "$DEV_PROJECT_DIR" ]; then
+                cd "$DEV_PROJECT_DIR"
+            else
+                echo "Error: No project directory configured."
+                echo "Set DEV_PROJECT_DIR in your config."
+                return 1
+            fi
+
+            "$SCRIPT_DIR/pauly" dev "$iterations" 2>&1
+            ;;
+
+        ""|run)
+            # Default: run dev loop with default iterations
+            local iterations="${args:-25}"
+            log "Running: pauly dev $iterations (from email)"
+
+            if [ -n "$DEV_PROJECT_DIR" ] && [ -d "$DEV_PROJECT_DIR" ]; then
+                cd "$DEV_PROJECT_DIR"
+            else
+                echo "Error: No project directory configured."
+                echo "Set DEV_PROJECT_DIR in your config."
+                return 1
+            fi
+
+            "$SCRIPT_DIR/pauly" dev "$iterations" 2>&1
+            ;;
+
+        *)
+            echo "Unknown dev command: $subcmd"
+            echo ""
+            echo "Available email dev commands:"
+            echo "  [PAULY] dev init     - Body contains the project idea"
+            echo "  [PAULY] dev task     - Body contains the task description"
+            echo "  [PAULY] dev 10       - Run 10 iterations"
+            echo "  [PAULY] dev          - Run default iterations"
+            echo "  [PAULY] dev status   - Show development progress"
+            return 1
+            ;;
+    esac
+}
+
 main() {
     log "Checking for email tasks..."
 
@@ -120,8 +224,20 @@ PYTHON_SCRIPT
 
         log "Processing task from $sender: $subject"
 
-        # Execute task via Claude
-        local result=$(claude --print "You received a task via email. Execute it and provide a summary of what you did.
+        # Check if this is a dev command
+        local result=""
+        local reply_subject=""
+
+        # Extract command after prefix (e.g., "[PAULY] dev init" -> "dev init")
+        local cmd=$(echo "$subject" | sed "s/^${TASK_SUBJECT_PREFIX}[[:space:]]*//" | tr '[:upper:]' '[:lower:]')
+
+        if [[ "$cmd" =~ ^dev ]]; then
+            # Handle dev commands
+            result=$(process_dev_command "$cmd" "$body" "$temp_dir")
+            reply_subject="Re: $subject - Dev Mode"
+        else
+            # Regular task - execute via Claude
+            result=$(claude --print "You received a task via email. Execute it and provide a summary of what you did.
 
 Subject: $subject
 
@@ -129,9 +245,10 @@ Task:
 $body
 
 Execute this task and provide a clear summary of the results." 2>&1)
+            reply_subject="Re: $subject - Completed"
+        fi
 
         # Send reply
-        local reply_subject="Re: $subject - Completed"
         local reply_body="Task completed.
 
 Results:
