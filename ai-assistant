@@ -1,0 +1,469 @@
+#!/bin/bash
+
+# AI Assistant CLI
+# Manage your automated AI assistant scripts
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh" 2>/dev/null || true
+
+VERSION="1.0.0"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# ==========================================
+# Helper Functions
+# ==========================================
+
+print_header() {
+    echo -e "${BOLD}${BLUE}AI Assistant${NC} v${VERSION}"
+    echo ""
+}
+
+print_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}✗${NC} $1" >&2
+}
+
+print_warning() {
+    echo -e "${YELLOW}!${NC} $1"
+}
+
+print_info() {
+    echo -e "${CYAN}→${NC} $1"
+}
+
+# ==========================================
+# Commands
+# ==========================================
+
+cmd_help() {
+    print_header
+    echo "Usage: ai-assistant <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  ${BOLD}run${NC} <job> [-bg]  Run a job manually (summary, git, research, all)"
+    echo "  ${BOLD}status${NC}           Show status of all scheduled jobs"
+    echo "  ${BOLD}logs${NC} [job]       View logs (optionally for specific job)"
+    echo "  ${BOLD}tail${NC} [job]       Follow logs in real-time"
+    echo "  ${BOLD}enable${NC} <job>     Enable a scheduled job"
+    echo "  ${BOLD}disable${NC} <job>    Disable a scheduled job"
+    echo "  ${BOLD}test-email${NC}       Send a test email"
+    echo "  ${BOLD}setup${NC}            Run the Mac Mini setup script"
+    echo "  ${BOLD}config${NC}           Edit configuration"
+    echo "  ${BOLD}version${NC}          Show version"
+    echo "  ${BOLD}help${NC}             Show this help message"
+    echo ""
+    echo "Jobs:"
+    echo "  summary    Daily Claude activity summary (5am)"
+    echo "  git        Git repository health check (6am)"
+    echo "  research   Project competitive analysis (Mondays 7am)"
+    echo "  all        Run all jobs sequentially"
+    echo ""
+    echo "Options:"
+    echo "  -bg, --background    Run in background (persists after SSH disconnect)"
+    echo ""
+    echo "Examples:"
+    echo "  ai-assistant run summary        # Run daily summary now"
+    echo "  ai-assistant run all -bg        # Run all jobs in background"
+    echo "  ai-assistant tail research      # Follow research logs live"
+    echo "  ai-assistant logs git           # View git health check logs"
+}
+
+cmd_version() {
+    echo "ai-assistant v${VERSION}"
+}
+
+cmd_status() {
+    print_header
+    echo -e "${BOLD}Scheduled Jobs:${NC}"
+    echo ""
+
+    local jobs=("claudesummary:summary:5:00am daily" "githealthcheck:git:6:00am daily" "projectresearch:research:7:00am Mondays")
+
+    for job_info in "${jobs[@]}"; do
+        IFS=':' read -r plist_name short_name schedule <<< "$job_info"
+        local plist_path="$LAUNCH_AGENTS_DIR/com.user.${plist_name}.plist"
+
+        if launchctl list 2>/dev/null | grep -q "com.user.${plist_name}"; then
+            echo -e "  ${GREEN}●${NC} ${BOLD}${short_name}${NC} - ${schedule}"
+        elif [ -f "$plist_path" ]; then
+            echo -e "  ${YELLOW}○${NC} ${BOLD}${short_name}${NC} - ${schedule} (disabled)"
+        else
+            echo -e "  ${RED}○${NC} ${BOLD}${short_name}${NC} - ${schedule} (not installed)"
+        fi
+    done
+
+    echo ""
+    echo -e "${BOLD}Recent Activity:${NC}"
+    echo ""
+
+    # Show last run time for each job
+    for log_name in daily-summary git-health-check project-research; do
+        local log_file="$SCRIPT_DIR/logs/${log_name}.log"
+        if [ -f "$log_file" ]; then
+            local last_run=$(grep -E "^\[" "$log_file" 2>/dev/null | tail -1 | grep -oE '\[.*\]' | tr -d '[]')
+            if [ -n "$last_run" ]; then
+                echo "  ${log_name}: last run $last_run"
+            fi
+        fi
+    done
+
+    echo ""
+    echo -e "${BOLD}Email Configuration:${NC}"
+    if [ -f "$HOME/.msmtprc" ]; then
+        if grep -q "YOUR_EMAIL" "$HOME/.msmtprc" 2>/dev/null; then
+            print_warning "Email not configured (edit ~/.msmtprc)"
+        else
+            print_success "Email configured"
+        fi
+    else
+        print_error "Email not configured (run: ai-assistant setup)"
+    fi
+}
+
+cmd_run() {
+    local job="$1"
+    local background="$2"
+
+    # Check for background flag
+    if [ "$background" = "-bg" ] || [ "$background" = "--background" ]; then
+        cmd_run_background "$job"
+        return
+    fi
+
+    case "$job" in
+        summary|daily)
+            print_info "Running daily summary..."
+            "$SCRIPT_DIR/daily-claude-summary.sh"
+            ;;
+        git|health)
+            print_info "Running git health check..."
+            "$SCRIPT_DIR/git-health-check.sh"
+            ;;
+        research|competitive)
+            print_info "Running project research..."
+            "$SCRIPT_DIR/project-research.sh"
+            ;;
+        all)
+            print_info "Running all jobs..."
+            "$SCRIPT_DIR/daily-claude-summary.sh"
+            "$SCRIPT_DIR/git-health-check.sh"
+            "$SCRIPT_DIR/project-research.sh"
+            ;;
+        -bg|--background)
+            print_error "Please specify a job before -bg flag"
+            echo "Example: ai-assistant run all -bg"
+            exit 1
+            ;;
+        "")
+            print_error "Please specify a job: summary, git, research, or all"
+            exit 1
+            ;;
+        *)
+            print_error "Unknown job: $job"
+            echo "Available jobs: summary, git, research, all"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_run_background() {
+    local job="$1"
+    local pid_file="$SCRIPT_DIR/logs/background.pid"
+    local bg_log="$SCRIPT_DIR/logs/background.log"
+
+    # Check if already running
+    if [ -f "$pid_file" ]; then
+        local old_pid=$(cat "$pid_file")
+        if kill -0 "$old_pid" 2>/dev/null; then
+            print_warning "A background job is already running (PID: $old_pid)"
+            echo "View progress: ai-assistant tail"
+            echo "Or kill it: kill $old_pid"
+            return 1
+        fi
+    fi
+
+    local scripts=""
+    case "$job" in
+        summary|daily)
+            scripts="$SCRIPT_DIR/daily-claude-summary.sh"
+            ;;
+        git|health)
+            scripts="$SCRIPT_DIR/git-health-check.sh"
+            ;;
+        research|competitive)
+            scripts="$SCRIPT_DIR/project-research.sh"
+            ;;
+        all)
+            scripts="$SCRIPT_DIR/daily-claude-summary.sh $SCRIPT_DIR/git-health-check.sh $SCRIPT_DIR/project-research.sh"
+            ;;
+        *)
+            print_error "Unknown job: $job"
+            exit 1
+            ;;
+    esac
+
+    # Run in background with nohup
+    (
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Background job started: $job" >> "$bg_log"
+        for script in $scripts; do
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Running: $(basename "$script")" >> "$bg_log"
+            "$script" >> "$bg_log" 2>&1
+        done
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Background job completed: $job" >> "$bg_log"
+        rm -f "$pid_file"
+    ) &
+
+    local bg_pid=$!
+    echo "$bg_pid" > "$pid_file"
+    disown "$bg_pid"
+
+    print_success "Started $job in background (PID: $bg_pid)"
+    echo ""
+    echo "The job will continue running after you disconnect."
+    echo ""
+    echo "Monitor progress:"
+    echo "  ai-assistant tail           # Follow logs live"
+    echo "  ai-assistant logs           # View recent logs"
+    echo "  kill $bg_pid                # Stop the job"
+}
+
+cmd_tail() {
+    local job="$1"
+    local log_file=""
+
+    case "$job" in
+        summary|daily)
+            log_file="$SCRIPT_DIR/logs/daily-summary.log"
+            ;;
+        git|health)
+            log_file="$SCRIPT_DIR/logs/git-health-check.log"
+            ;;
+        research|competitive)
+            log_file="$SCRIPT_DIR/logs/project-research.log"
+            ;;
+        ""|all)
+            log_file="$SCRIPT_DIR/logs/background.log"
+            ;;
+        *)
+            print_error "Unknown job: $job"
+            exit 1
+            ;;
+    esac
+
+    if [ -f "$log_file" ]; then
+        print_info "Following $log_file (Ctrl+C to stop)"
+        tail -f "$log_file"
+    else
+        print_warning "No logs found at $log_file"
+    fi
+}
+
+cmd_logs() {
+    local job="$1"
+    local log_file=""
+
+    case "$job" in
+        summary|daily|"")
+            log_file="$SCRIPT_DIR/logs/daily-summary.log"
+            [ -z "$job" ] && log_file=""  # Show all if no job specified
+            ;;
+        git|health)
+            log_file="$SCRIPT_DIR/logs/git-health-check.log"
+            ;;
+        research|competitive)
+            log_file="$SCRIPT_DIR/logs/project-research.log"
+            ;;
+        *)
+            print_error "Unknown job: $job"
+            exit 1
+            ;;
+    esac
+
+    if [ -n "$log_file" ]; then
+        if [ -f "$log_file" ]; then
+            echo -e "${BOLD}Logs: $log_file${NC}"
+            echo ""
+            tail -100 "$log_file"
+        else
+            print_warning "No logs found at $log_file"
+        fi
+    else
+        # Show all logs
+        echo -e "${BOLD}All Logs:${NC}"
+        echo ""
+        for log in "$SCRIPT_DIR/logs"/*.log; do
+            if [ -f "$log" ]; then
+                echo -e "${CYAN}=== $(basename "$log") ===${NC}"
+                tail -20 "$log"
+                echo ""
+            fi
+        done
+    fi
+}
+
+cmd_enable() {
+    local job="$1"
+    local plist_name=""
+
+    case "$job" in
+        summary|daily)
+            plist_name="claudesummary"
+            ;;
+        git|health)
+            plist_name="githealthcheck"
+            ;;
+        research|competitive)
+            plist_name="projectresearch"
+            ;;
+        "")
+            print_error "Please specify a job: summary, git, or research"
+            exit 1
+            ;;
+        *)
+            print_error "Unknown job: $job"
+            exit 1
+            ;;
+    esac
+
+    local plist_source="$SCRIPT_DIR/com.user.${plist_name}.plist"
+    local plist_dest="$LAUNCH_AGENTS_DIR/com.user.${plist_name}.plist"
+
+    if [ ! -f "$plist_source" ]; then
+        print_error "Plist not found: $plist_source"
+        exit 1
+    fi
+
+    mkdir -p "$LAUNCH_AGENTS_DIR"
+    cp "$plist_source" "$plist_dest"
+    launchctl unload "$plist_dest" 2>/dev/null || true
+    launchctl load "$plist_dest"
+
+    print_success "Enabled $job"
+}
+
+cmd_disable() {
+    local job="$1"
+    local plist_name=""
+
+    case "$job" in
+        summary|daily)
+            plist_name="claudesummary"
+            ;;
+        git|health)
+            plist_name="githealthcheck"
+            ;;
+        research|competitive)
+            plist_name="projectresearch"
+            ;;
+        "")
+            print_error "Please specify a job: summary, git, or research"
+            exit 1
+            ;;
+        *)
+            print_error "Unknown job: $job"
+            exit 1
+            ;;
+    esac
+
+    local plist_dest="$LAUNCH_AGENTS_DIR/com.user.${plist_name}.plist"
+
+    if [ -f "$plist_dest" ]; then
+        launchctl unload "$plist_dest" 2>/dev/null || true
+        rm "$plist_dest"
+        print_success "Disabled $job"
+    else
+        print_warning "$job is not enabled"
+    fi
+}
+
+cmd_test_email() {
+    print_info "Sending test email to $EMAIL..."
+
+    if echo "This is a test email from your AI Assistant setup." | mail -s "AI Assistant Test - $(date '+%Y-%m-%d %H:%M')" "$EMAIL" 2>/dev/null; then
+        print_success "Test email sent to $EMAIL"
+    else
+        print_error "Failed to send email. Check your ~/.msmtprc configuration."
+        exit 1
+    fi
+}
+
+cmd_setup() {
+    print_info "Running setup script..."
+    echo "This requires sudo access."
+    sudo "$SCRIPT_DIR/setup-mac-mini.sh"
+}
+
+cmd_config() {
+    local config_file="$SCRIPT_DIR/lib/common.sh"
+
+    if [ -n "$EDITOR" ]; then
+        $EDITOR "$config_file"
+    elif command -v nano &> /dev/null; then
+        nano "$config_file"
+    elif command -v vim &> /dev/null; then
+        vim "$config_file"
+    else
+        print_error "No editor found. Set \$EDITOR or install nano/vim."
+        echo "Config file: $config_file"
+        exit 1
+    fi
+}
+
+# ==========================================
+# Main
+# ==========================================
+
+case "${1:-help}" in
+    run)
+        cmd_run "$2" "$3"
+        ;;
+    status|st)
+        cmd_status
+        ;;
+    logs|log)
+        cmd_logs "$2"
+        ;;
+    tail|follow)
+        cmd_tail "$2"
+        ;;
+    enable)
+        cmd_enable "$2"
+        ;;
+    disable)
+        cmd_disable "$2"
+        ;;
+    test-email|test)
+        cmd_test_email
+        ;;
+    setup)
+        cmd_setup
+        ;;
+    config|configure)
+        cmd_config
+        ;;
+    version|--version|-v)
+        cmd_version
+        ;;
+    help|--help|-h)
+        cmd_help
+        ;;
+    *)
+        print_error "Unknown command: $1"
+        echo "Run 'ai-assistant help' for usage."
+        exit 1
+        ;;
+esac
