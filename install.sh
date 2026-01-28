@@ -36,6 +36,13 @@ chmod +x *.sh 2>/dev/null || true
 # Create symlink
 echo ""
 echo "Creating symlink..."
+
+# Ensure /usr/local/bin exists
+if [ ! -d /usr/local/bin ]; then
+    echo "Creating /usr/local/bin..."
+    sudo mkdir -p /usr/local/bin
+fi
+
 if [ -w /usr/local/bin ]; then
     ln -sf "$INSTALL_DIR/pauly" /usr/local/bin/pauly
     echo "Installed to /usr/local/bin/pauly"
