@@ -74,7 +74,7 @@ cmd_help() {
     echo "  summary    Daily Claude activity summary (5am)"
     echo "  git        Git repository health check (6am)"
     echo "  research   Project competitive analysis (Mondays 7am)"
-    echo "  tasks      Check inbox for email tasks (every 5 min)"
+    echo "  tasks      Check for tasks (GitHub Issues and/or email)"
     echo "  all        Run all jobs sequentially"
     echo ""
     echo "Dev Commands:"
@@ -165,6 +165,20 @@ cmd_status() {
     fi
 
     echo ""
+    echo -e "${BOLD}Task Systems:${NC}"
+    if [ -n "$GITHUB_TASKS_REPO" ]; then
+        print_success "GitHub Issues: $GITHUB_TASKS_REPO (label: $GITHUB_TASKS_LABEL)"
+    else
+        echo -e "  ${RED}○${NC} GitHub Issues: not configured"
+    fi
+
+    if [ -n "$ALLOWED_SENDERS" ]; then
+        print_success "Email tasks: enabled"
+    else
+        echo -e "  ${RED}○${NC} Email tasks: not configured"
+    fi
+
+    echo ""
     echo -e "${BOLD}Email Setup:${NC}"
     if [ -f "$HOME/.msmtprc" ]; then
         if grep -q "YOUR_EMAIL\|YOUR_APP_PASSWORD" "$HOME/.msmtprc" 2>/dev/null; then
@@ -200,9 +214,26 @@ cmd_run() {
             print_info "Running project research..."
             "$SCRIPT_DIR/project-research.sh"
             ;;
-        tasks|email)
-            print_info "Checking for email tasks..."
-            "$SCRIPT_DIR/check-email-tasks.sh"
+        tasks)
+            # Run configured task systems
+            local ran_any=false
+
+            if [ -n "$GITHUB_TASKS_REPO" ]; then
+                print_info "Checking GitHub Issues for tasks..."
+                "$SCRIPT_DIR/check-github-tasks.sh"
+                ran_any=true
+            fi
+
+            if [ -n "$ALLOWED_SENDERS" ]; then
+                print_info "Checking email for tasks..."
+                "$SCRIPT_DIR/check-email-tasks.sh"
+                ran_any=true
+            fi
+
+            if [ "$ran_any" = false ]; then
+                print_warning "No task systems configured."
+                echo "Run 'pauly config' to set up GitHub Issues or email tasks."
+            fi
             ;;
         all)
             print_info "Running all jobs..."
@@ -383,10 +414,11 @@ cmd_enable() {
             cron_schedule="0 7 * * 1"  # 7am Mondays
             script_path="$SCRIPT_DIR/project-research.sh"
             ;;
-        tasks|email)
+        tasks)
             job="tasks"
             cron_schedule="*/5 * * * *"  # Every 5 minutes
-            script_path="$SCRIPT_DIR/check-email-tasks.sh"
+            # Use a wrapper that runs both configured task systems
+            script_path="$SCRIPT_DIR/pauly run tasks"
             ;;
         all)
             cmd_enable "summary"

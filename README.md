@@ -88,7 +88,7 @@ Pauly automatically detects API rate limits and session limits, waiting and retr
 | `summary` | 5:00am daily | Summarizes Claude Code activity from the last 24 hours |
 | `git` | 6:00am daily | Checks all repos for uncommitted changes, unpushed commits, stale branches |
 | `research` | 7:00am Mondays | Analyzes projects and finds similar tools/improvements |
-| `tasks` | Every 5 min | Checks inbox for email tasks and executes them |
+| `tasks` | Every 5 min | Checks GitHub Issues and/or email for tasks |
 
 Enable/disable jobs:
 ```bash
@@ -144,7 +144,8 @@ Configuration files:
 ├── daily-claude-summary.sh         # Daily activity summary
 ├── git-health-check.sh             # Git repo health check
 ├── project-research.sh             # Competitive analysis
-├── check-email-tasks.sh            # Email task processor
+├── check-github-tasks.sh           # GitHub Issues task processor
+├── check-email-tasks.sh            # Email task processor (optional)
 ├── lib/
 │   ├── common.sh                   # Shared functions
 │   ├── config.sh                   # Configuration management
@@ -163,7 +164,72 @@ your-project/
     └── tasks/                      # Isolated task states
 ```
 
-## Email Tasks
+## Task Input Methods
+
+Pauly supports two ways to receive tasks: **GitHub Issues** (recommended) and **Email**. Both are optional - configure whichever works best for you.
+
+---
+
+## GitHub Issues (Recommended)
+
+Create issues in a GitHub repo to trigger tasks. Results are posted as comments.
+
+### Setup
+
+1. Create a repo for tasks (e.g., `your-username/pauly-tasks`)
+2. Run `pauly config` and enable GitHub Issues tasks
+3. Enable the tasks job: `pauly enable tasks`
+4. Authenticate GitHub CLI: `gh auth login`
+
+### Usage
+
+Create an issue in your tasks repo:
+- **Title**: Task description or dev command
+- **Labels**: `pauly` (required), `project:myapp` (optional - targets specific project)
+- **Body**: Details or context
+
+**Example - Regular task:**
+```
+Title: Check for security vulnerabilities
+Labels: pauly, project:my-api
+Body: Scan the codebase for common security issues and create a report.
+```
+
+**Example - Dev command:**
+```
+Title: dev init
+Labels: pauly, project:new-saas-idea
+Body: Build a SaaS dashboard with user authentication,
+      billing integration, and a REST API.
+```
+
+### Project Targeting
+
+Use `project:name` labels to run tasks in specific project directories:
+- `project:my-app` → runs in `~/Projects/my-app`
+- `project:website` → runs in `~/Projects/website`
+- No project label → runs in default directory
+
+### Dev Commands via Issues
+
+| Title | Labels | Body | Action |
+|-------|--------|------|--------|
+| `dev init` | `pauly`, `project:name` | Project idea | Creates new project |
+| `dev task` | `pauly`, `project:name` | Task description | Runs isolated task |
+| `dev 10` | `pauly`, `project:name` | - | Runs 10 iterations |
+| `dev status` | `pauly`, `project:name` | - | Returns progress |
+
+### Workflow
+
+1. Create issue with `pauly` label
+2. Pauly comments "Working on it..."
+3. Pauly executes the task in the target project
+4. Pauly posts results as a comment
+5. Pauly closes the issue
+
+---
+
+## Email Tasks (Optional)
 
 Send tasks to Pauly via email and get results back automatically.
 
@@ -214,7 +280,9 @@ To enable, run `pauly config` and set a **Dev project directory** when prompted.
 ## Features
 
 - **Autonomous development** - PLAN->EXECUTE->REVIEW->FIX loop builds projects from ideas
-- **Email-driven tasks** - Send tasks via email, get results back
+- **GitHub Issues tasks** - Create issues to trigger tasks, results posted as comments
+- **Email tasks** - Send tasks via email, get results back (optional)
+- **Project targeting** - Use labels to run tasks in specific project directories
 - **Cron-based scheduling** - Works on any Unix system
 - **Interactive configuration** - No manual file editing
 - **Automatic log rotation** - Logs rotate at 10MB, keeps 5 files
@@ -252,7 +320,7 @@ pauly enable summary
 ## Requirements
 
 - macOS or Linux
-- Python 3 (for email tasks)
 - Claude CLI (`claude`)
-- Gmail account (for notifications)
-- GitHub CLI (`gh`) (optional, for PR creation)
+- GitHub CLI (`gh`) - for GitHub Issues tasks and PR creation
+- Python 3 (optional, for email tasks)
+- Gmail account (optional, for notifications and email tasks)

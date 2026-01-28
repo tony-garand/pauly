@@ -27,6 +27,10 @@ DEFAULT_TASK_SUBJECT_PREFIX="[PAULY]"
 # Dev mode defaults
 DEFAULT_DEV_PROJECT_DIR=""
 
+# GitHub tasks defaults
+DEFAULT_GITHUB_TASKS_REPO=""
+DEFAULT_GITHUB_TASKS_LABEL="pauly"
+
 # Config files
 MSMTP_CONFIG="$HOME/.msmtprc"
 
@@ -62,6 +66,10 @@ load_config() {
 
     # Dev mode defaults
     DEV_PROJECT_DIR="${DEFAULT_DEV_PROJECT_DIR}"
+
+    # GitHub tasks defaults
+    GITHUB_TASKS_REPO="${DEFAULT_GITHUB_TASKS_REPO}"
+    GITHUB_TASKS_LABEL="${DEFAULT_GITHUB_TASKS_LABEL}"
 
     # Load from file if exists
     if [ -f "$CONFIG_FILE" ]; then
@@ -103,6 +111,10 @@ TASK_SUBJECT_PREFIX="$TASK_SUBJECT_PREFIX"
 
 # Dev Mode Configuration
 DEV_PROJECT_DIR="$DEV_PROJECT_DIR"
+
+# GitHub Tasks Configuration
+GITHUB_TASKS_REPO="$GITHUB_TASKS_REPO"
+GITHUB_TASKS_LABEL="$GITHUB_TASKS_LABEL"
 EOF
 
     chmod 600 "$CONFIG_FILE"
@@ -259,6 +271,26 @@ run_config_wizard() {
         echo ""
     fi
 
+    # GitHub Tasks Configuration
+    if prompt_yes_no "Enable GitHub Issues tasks? (create issues to trigger tasks)" "n"; then
+        echo ""
+        echo "GitHub Tasks Configuration"
+        echo "--------------------------"
+        echo "Create issues in a repo to trigger Pauly tasks."
+        echo "Use labels like 'project:myapp' to target specific projects."
+        echo ""
+        echo "Repository format: owner/repo (e.g., tony-garand/pauly-tasks)"
+        GITHUB_TASKS_REPO=$(prompt_value "GitHub tasks repo" "$GITHUB_TASKS_REPO")
+        GITHUB_TASKS_LABEL=$(prompt_value "Label to watch for" "$GITHUB_TASKS_LABEL")
+        echo ""
+
+        if [ -z "$DEV_PROJECT_DIR" ]; then
+            echo "Default project directory for tasks without a project label."
+            DEV_PROJECT_DIR=$(prompt_value "Default project directory" "$DEV_PROJECT_DIR")
+            echo ""
+        fi
+    fi
+
     # Advanced settings
     if prompt_yes_no "Configure advanced settings?" "n"; then
         echo ""
@@ -335,6 +367,13 @@ show_config() {
         if [ -n "$DEV_PROJECT_DIR" ]; then
             echo "  Dev project:  $DEV_PROJECT_DIR"
         fi
+    fi
+
+    if [ -n "$GITHUB_TASKS_REPO" ]; then
+        echo ""
+        echo "GitHub Tasks:"
+        echo "  Repo:         $GITHUB_TASKS_REPO"
+        echo "  Label:        $GITHUB_TASKS_LABEL"
     fi
 
     if [ -n "$HEALTHCHECK_URL" ]; then
