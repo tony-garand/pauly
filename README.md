@@ -93,29 +93,6 @@ The setup script configures:
 - Tailscale for secure remote access
 - All scheduled jobs via launchd
 
-### Email Configuration
-
-Edit `~/.msmtprc` with your Gmail credentials:
-
-```
-defaults
-auth           on
-tls            on
-tls_trust_file /etc/ssl/cert.pem
-logfile        ~/.msmtp.log
-
-account        gmail
-host           smtp.gmail.com
-port           587
-from           your-email@gmail.com
-user           your-email@gmail.com
-password       your-app-password
-
-account default : gmail
-```
-
-Generate an app password at: https://myaccount.google.com/apppasswords
-
 ## Configuration
 
 Run the interactive configuration wizard:
@@ -127,9 +104,18 @@ pauly config
 This will prompt you for:
 - **Email** - Where to send notifications and alerts
 - **Projects directory** - Where your git repos live
+- **SMTP settings** - Host, port, username, and app password
 - **Advanced settings** - Log rotation, healthcheck URL
 
-Configuration is stored in `~/.config/pauly/config`.
+### Gmail Setup
+
+1. Go to https://myaccount.google.com/apppasswords
+2. Generate an app password for "Mail"
+3. Run `pauly config` and enter the app password when prompted
+
+Configuration files:
+- `~/.config/pauly/config` - Pauly settings
+- `~/.msmtprc` - SMTP settings (auto-generated)
 
 To view current settings:
 ```bash
@@ -152,7 +138,7 @@ pauly tail git
 
 **Test email:**
 ```bash
-echo "test" | mail -s "Test" your-email@gmail.com
+pauly test-email
 ```
 
 **Reload a job after editing plist:**
