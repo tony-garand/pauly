@@ -23,6 +23,9 @@ pauly disable <job>     Disable a scheduled job
 pauly test-email        Send a test email
 pauly config            Configure settings interactively
 pauly config show       Show current configuration
+pauly autofix           Show auto-fix status
+pauly autofix test      Test auto-fix with simulated failure
+pauly autofix logs      View auto-fix logs
 pauly setup             Run full setup wizard
 ```
 
@@ -150,8 +153,10 @@ Configuration files:
 ├── lib/
 │   ├── common.sh                   # Shared functions
 │   ├── config.sh                   # Configuration management
-│   └── dev.sh                      # Autonomous development system
+│   ├── dev.sh                      # Autonomous development system
+│   └── autofix.sh                  # Auto-fix module
 ├── logs/                           # Log files (auto-rotated)
+│   └── autofix/                    # Auto-fix attempt logs
 └── cache/
     └── research/                   # Cached research results
 
@@ -278,6 +283,57 @@ To enable, run `pauly config` and set a **Dev project directory** when prompted.
 - Only emails from allowed senders are processed (configured during setup)
 - Tasks are executed in the context of your projects directory
 
+---
+
+## Auto-Fix
+
+When a job fails, Pauly can automatically analyze the error, determine if it's a code bug, and create a PR with the fix.
+
+### How It Works
+
+1. Job fails and sends email alert (as normal)
+2. Pauly analyzes the error with Claude
+3. If it's a fixable code bug:
+   - Creates a new branch (`autofix/<script>-<timestamp>`)
+   - Claude implements the fix
+   - Pushes and creates a PR
+   - Sends notification email with PR link
+4. If not fixable, logs the reason and continues
+
+### Setup
+
+```bash
+pauly config  # Enable auto-fix when prompted
+```
+
+### Commands
+
+```bash
+pauly autofix           # Show status and recent attempts
+pauly autofix test      # Test with simulated failure
+pauly autofix logs      # View auto-fix logs
+```
+
+### Safety Features
+
+- **Opt-in**: Disabled by default
+- **Lock file**: Prevents infinite loops (30-min timeout)
+- **Human review**: Creates PRs, never auto-merges
+- **Conservative**: Only fixes clear code bugs, not config/network/permission issues
+- **Alerts preserved**: Runs after email alert, not instead of
+- **Audit trail**: All attempts logged to `logs/autofix/`
+
+### Configuration Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `AUTOFIX_ENABLED` | `false` | Master switch |
+| `AUTOFIX_SCRIPTS` | `all` | Which scripts can trigger auto-fix |
+| `AUTOFIX_MAX_ATTEMPTS` | `1` | Max attempts per failure |
+| `AUTOFIX_BRANCH_PREFIX` | `autofix` | Branch naming prefix |
+
+---
+
 ## Features
 
 - **Autonomous development** - PLAN->EXECUTE->REVIEW->FIX loop builds projects from ideas
@@ -288,6 +344,7 @@ To enable, run `pauly config` and set a **Dev project directory** when prompted.
 - **Interactive configuration** - No manual file editing
 - **Automatic log rotation** - Logs rotate at 10MB, keeps 5 files
 - **Failure alerts** - Email notification if any job fails
+- **Auto-fix** - Automatically creates PRs to fix code bugs when jobs fail
 - **Background execution** - Run jobs that persist after SSH disconnect
 - **Research caching** - Project analysis cached for 7 days
 - **Session limit handling** - Automatic retry on API rate limits
