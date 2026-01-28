@@ -10,7 +10,7 @@ source "$SCRIPT_DIR/lib/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/common.sh" 2>/dev/null || true
 
 VERSION="1.0.0"
-LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+CRON_MARKER="# pauly-job"
 
 # Colors
 RED='\033[0;31m'
@@ -93,20 +93,26 @@ cmd_status() {
     echo -e "${BOLD}Scheduled Jobs:${NC}"
     echo ""
 
-    local jobs=("claudesummary:summary:5:00am daily" "githealthcheck:git:6:00am daily" "projectresearch:research:7:00am Mondays")
+    local current_cron=$(crontab -l 2>/dev/null || echo "")
 
-    for job_info in "${jobs[@]}"; do
-        IFS=':' read -r plist_name short_name schedule <<< "$job_info"
-        local plist_path="$LAUNCH_AGENTS_DIR/com.user.${plist_name}.plist"
+    # Check each job
+    if echo "$current_cron" | grep -q "$CRON_MARKER:summary"; then
+        echo -e "  ${GREEN}●${NC} ${BOLD}summary${NC}  - 5:00am daily"
+    else
+        echo -e "  ${RED}○${NC} ${BOLD}summary${NC}  - 5:00am daily (disabled)"
+    fi
 
-        if launchctl list 2>/dev/null | grep -q "com.user.${plist_name}"; then
-            echo -e "  ${GREEN}●${NC} ${BOLD}${short_name}${NC} - ${schedule}"
-        elif [ -f "$plist_path" ]; then
-            echo -e "  ${YELLOW}○${NC} ${BOLD}${short_name}${NC} - ${schedule} (disabled)"
-        else
-            echo -e "  ${RED}○${NC} ${BOLD}${short_name}${NC} - ${schedule} (not installed)"
-        fi
-    done
+    if echo "$current_cron" | grep -q "$CRON_MARKER:git"; then
+        echo -e "  ${GREEN}●${NC} ${BOLD}git${NC}      - 6:00am daily"
+    else
+        echo -e "  ${RED}○${NC} ${BOLD}git${NC}      - 6:00am daily (disabled)"
+    fi
+
+    if echo "$current_cron" | grep -q "$CRON_MARKER:research"; then
+        echo -e "  ${GREEN}●${NC} ${BOLD}research${NC} - 7:00am Mondays"
+    else
+        echo -e "  ${RED}○${NC} ${BOLD}research${NC} - 7:00am Mondays (disabled)"
+    fi
 
     echo ""
     echo -e "${BOLD}Recent Activity:${NC}"
@@ -331,20 +337,33 @@ cmd_logs() {
 
 cmd_enable() {
     local job="$1"
-    local plist_name=""
+    local cron_schedule=""
+    local script_path=""
 
     case "$job" in
         summary|daily)
-            plist_name="claudesummary"
+            job="summary"
+            cron_schedule="0 5 * * *"  # 5am daily
+            script_path="$SCRIPT_DIR/daily-claude-summary.sh"
             ;;
         git|health)
-            plist_name="githealthcheck"
+            job="git"
+            cron_schedule="0 6 * * *"  # 6am daily
+            script_path="$SCRIPT_DIR/git-health-check.sh"
             ;;
         research|competitive)
-            plist_name="projectresearch"
+            job="research"
+            cron_schedule="0 7 * * 1"  # 7am Mondays
+            script_path="$SCRIPT_DIR/project-research.sh"
+            ;;
+        all)
+            cmd_enable "summary"
+            cmd_enable "git"
+            cmd_enable "research"
+            return
             ;;
         "")
-            print_error "Please specify a job: summary, git, or research"
+            print_error "Please specify a job: summary, git, research, or all"
             exit 1
             ;;
         *)
@@ -353,38 +372,48 @@ cmd_enable() {
             ;;
     esac
 
-    local plist_source="$SCRIPT_DIR/com.user.${plist_name}.plist"
-    local plist_dest="$LAUNCH_AGENTS_DIR/com.user.${plist_name}.plist"
+    # Get current crontab
+    local current_cron=$(crontab -l 2>/dev/null || echo "")
 
-    if [ ! -f "$plist_source" ]; then
-        print_error "Plist not found: $plist_source"
-        exit 1
+    # Check if already enabled
+    if echo "$current_cron" | grep -q "$CRON_MARKER:$job"; then
+        print_warning "$job is already enabled"
+        return
     fi
 
-    mkdir -p "$LAUNCH_AGENTS_DIR"
-    cp "$plist_source" "$plist_dest"
-    launchctl unload "$plist_dest" 2>/dev/null || true
-    launchctl load "$plist_dest"
+    # Add new cron entry
+    local new_entry="$cron_schedule $script_path >> $SCRIPT_DIR/logs/cron.log 2>&1 $CRON_MARKER:$job"
 
-    print_success "Enabled $job"
+    if [ -z "$current_cron" ]; then
+        echo "$new_entry" | crontab -
+    else
+        (echo "$current_cron"; echo "$new_entry") | crontab -
+    fi
+
+    print_success "Enabled $job ($cron_schedule)"
 }
 
 cmd_disable() {
     local job="$1"
-    local plist_name=""
 
     case "$job" in
         summary|daily)
-            plist_name="claudesummary"
+            job="summary"
             ;;
         git|health)
-            plist_name="githealthcheck"
+            job="git"
             ;;
         research|competitive)
-            plist_name="projectresearch"
+            job="research"
+            ;;
+        all)
+            cmd_disable "summary"
+            cmd_disable "git"
+            cmd_disable "research"
+            return
             ;;
         "")
-            print_error "Please specify a job: summary, git, or research"
+            print_error "Please specify a job: summary, git, research, or all"
             exit 1
             ;;
         *)
@@ -393,15 +422,19 @@ cmd_disable() {
             ;;
     esac
 
-    local plist_dest="$LAUNCH_AGENTS_DIR/com.user.${plist_name}.plist"
+    # Get current crontab
+    local current_cron=$(crontab -l 2>/dev/null || echo "")
 
-    if [ -f "$plist_dest" ]; then
-        launchctl unload "$plist_dest" 2>/dev/null || true
-        rm "$plist_dest"
-        print_success "Disabled $job"
-    else
+    # Check if enabled
+    if ! echo "$current_cron" | grep -q "$CRON_MARKER:$job"; then
         print_warning "$job is not enabled"
+        return
     fi
+
+    # Remove the job
+    echo "$current_cron" | grep -v "$CRON_MARKER:$job" | crontab -
+
+    print_success "Disabled $job"
 }
 
 cmd_test_email() {

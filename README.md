@@ -1,22 +1,23 @@
 # Pauly
 
-A CLI tool for running automated AI-powered tasks on a dedicated Mac Mini (or any Mac). Includes daily summaries, git health checks, and competitive project analysis.
+A CLI tool for running automated AI-powered tasks. Includes daily summaries, git health checks, and competitive project analysis.
 
 ## Quick Start
 
 ```bash
-# Add CLI to PATH
-sudo ln -sf ~/Projects/pauly/pauly /usr/local/bin/pauly
+# Clone and setup
+git clone https://github.com/tony-garand/pauly.git
+cd pauly
 
-# Configure Pauly (interactive prompts)
-pauly config
+# Run setup (interactive)
+./setup-mac-mini.sh
 
-# Run Mac Mini setup (for dedicated server)
-pauly setup
+# Or configure manually
+./pauly config
+./pauly enable all
 
-# Test it
-pauly test-email
-pauly run summary
+# Add to PATH
+sudo ln -sf $(pwd)/pauly /usr/local/bin/pauly
 ```
 
 ## Commands
@@ -26,12 +27,12 @@ pauly run <job> [-bg]   Run a job (summary, git, research, all)
 pauly status            Show status of all scheduled jobs
 pauly logs [job]        View logs
 pauly tail [job]        Follow logs in real-time
-pauly enable <job>      Enable a scheduled job
+pauly enable <job>      Enable a scheduled job (via cron)
 pauly disable <job>     Disable a scheduled job
 pauly test-email        Send a test email
-pauly setup             Run Mac Mini setup
 pauly config            Configure settings interactively
 pauly config show       Show current configuration
+pauly setup             Run full setup wizard
 ```
 
 ## Scheduled Jobs
@@ -42,10 +43,17 @@ pauly config show       Show current configuration
 | `git` | 6:00am daily | Checks all repos for uncommitted changes, unpushed commits, stale branches |
 | `research` | 7:00am Mondays | Analyzes projects and finds similar tools/improvements |
 
+Enable/disable jobs:
+```bash
+pauly enable all        # Enable all jobs
+pauly disable research  # Disable specific job
+pauly status            # Check what's enabled
+```
+
 ## Running Jobs Manually
 
 ```bash
-# Run in foreground (stops if you disconnect SSH)
+# Run in foreground
 pauly run summary
 
 # Run in background (persists after SSH disconnect)
@@ -54,44 +62,6 @@ pauly run all -bg
 # Monitor background job
 pauly tail
 ```
-
-## Project Structure
-
-```
-pauly/
-├── pauly                           # CLI tool
-├── daily-claude-summary.sh         # Daily activity summary
-├── git-health-check.sh             # Git repo health check
-├── project-research.sh             # Competitive analysis
-├── setup-mac-mini.sh               # Full Mac setup script
-├── lib/
-│   ├── common.sh                   # Shared functions
-│   └── config.sh                   # Configuration management
-├── logs/                           # Log files (auto-rotated)
-├── cache/
-│   └── research/                   # Cached research results
-└── com.user.*.plist                # launchd job configs
-
-~/.config/pauly/config              # User configuration (created by 'pauly config')
-```
-
-## Features
-
-- **Automatic log rotation** - Logs rotate at 10MB, keeps 5 files
-- **Failure alerts** - Email notification if any job fails
-- **Background execution** - Run jobs that persist after SSH disconnect
-- **Research caching** - Project analysis cached for 7 days
-
-## Mac Mini Setup
-
-The setup script configures:
-
-- Homebrew and required packages
-- Power management (no sleep, auto-restart after power failure)
-- SSH remote access
-- Email via msmtp
-- Tailscale for secure remote access
-- All scheduled jobs via launchd
 
 ## Configuration
 
@@ -117,17 +87,38 @@ Configuration files:
 - `~/.config/pauly/config` - Pauly settings
 - `~/.msmtprc` - SMTP settings (auto-generated)
 
-To view current settings:
-```bash
-pauly config show
+## Project Structure
+
 ```
+pauly/
+├── pauly                           # CLI tool
+├── daily-claude-summary.sh         # Daily activity summary
+├── git-health-check.sh             # Git repo health check
+├── project-research.sh             # Competitive analysis
+├── setup-mac-mini.sh               # Setup wizard
+├── lib/
+│   ├── common.sh                   # Shared functions
+│   └── config.sh                   # Configuration management
+├── logs/                           # Log files (auto-rotated)
+└── cache/
+    └── research/                   # Cached research results
+```
+
+## Features
+
+- **Cron-based scheduling** - Works on any Unix system
+- **Interactive configuration** - No manual file editing
+- **Automatic log rotation** - Logs rotate at 10MB, keeps 5 files
+- **Failure alerts** - Email notification if any job fails
+- **Background execution** - Run jobs that persist after SSH disconnect
+- **Research caching** - Project analysis cached for 7 days
 
 ## Troubleshooting
 
 **Check job status:**
 ```bash
 pauly status
-launchctl list | grep com.user
+crontab -l  # View raw cron entries
 ```
 
 **View logs:**
@@ -141,7 +132,7 @@ pauly tail git
 pauly test-email
 ```
 
-**Reload a job after editing plist:**
+**Re-enable a job:**
 ```bash
 pauly disable summary
 pauly enable summary
@@ -149,7 +140,7 @@ pauly enable summary
 
 ## Requirements
 
-- macOS
-- Homebrew
+- macOS or Linux
+- Homebrew (macOS) or apt (Linux)
 - Claude CLI (`claude`)
 - Gmail account (for notifications)
