@@ -127,11 +127,24 @@ process_issue() {
 
     if [[ "$title_lower" =~ ^dev ]]; then
         # Dev command
-        result=$(process_github_dev_command "$title_lower" "$body" "$work_dir" 2>&1)
+        log "Running dev command: $title_lower"
+        echo "------- Dev Command Output -------"
+
+        local temp_output=$(mktemp)
+        process_github_dev_command "$title_lower" "$body" "$work_dir" 2>&1 | tee "$temp_output"
+        result=$(cat "$temp_output")
+        rm -f "$temp_output"
+
+        echo "------- End Dev Command Output -------"
     else
         # Regular task - execute via Claude
         cd "$work_dir" || return 1
-        result=$(claude --dangerously-skip-permissions -p "You received a task via GitHub issue. Execute it and provide a summary of what you did.
+        log "Starting Claude for task: $title"
+        echo "------- Claude Output -------"
+
+        # Run Claude and capture output while streaming to console
+        local temp_output=$(mktemp)
+        claude --dangerously-skip-permissions -p "You received a task via GitHub issue. Execute it and provide a summary of what you did.
 
 Title: $title
 
@@ -140,8 +153,15 @@ $body
 
 Working directory: $work_dir
 
-Execute this task and provide a clear summary of the results." 2>&1)
+Execute this task and provide a clear summary of the results." 2>&1 | tee "$temp_output"
+
+        result=$(cat "$temp_output")
+        rm -f "$temp_output"
+
+        echo "------- End Claude Output -------"
     fi
+
+    log "Task completed (${#result} chars of output)"
 
     # Post results as comment
     local result_comment="## Results
