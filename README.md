@@ -2,23 +2,13 @@
 
 A CLI tool for running automated AI-powered tasks. Includes daily summaries, git health checks, and competitive project analysis.
 
-## Quick Start
+## Install
 
 ```bash
-# Clone and setup
-git clone https://github.com/tony-garand/pauly.git
-cd pauly
-
-# Run setup (interactive)
-./setup-mac-mini.sh
-
-# Or configure manually
-./pauly config
-./pauly enable all
-
-# Add to PATH
-sudo ln -sf $(pwd)/pauly /usr/local/bin/pauly
+curl -fsSL https://raw.githubusercontent.com/tony-garand/pauly/main/install.sh | bash
 ```
+
+This will clone to `~/.pauly`, add to PATH, and run the interactive setup.
 
 ## Commands
 
@@ -90,12 +80,13 @@ Configuration files:
 ## Project Structure
 
 ```
-pauly/
+~/.pauly/
 ├── pauly                           # CLI tool
+├── install.sh                      # Installer (curl-able)
+├── setup.sh                        # Setup wizard
 ├── daily-claude-summary.sh         # Daily activity summary
 ├── git-health-check.sh             # Git repo health check
 ├── project-research.sh             # Competitive analysis
-├── setup-mac-mini.sh               # Setup wizard
 ├── lib/
 │   ├── common.sh                   # Shared functions
 │   └── config.sh                   # Configuration management
