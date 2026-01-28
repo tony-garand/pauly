@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# AI Assistant CLI
+# Pauly CLI
 # Manage your automated AI assistant scripts
 
 set -e
@@ -25,7 +25,7 @@ BOLD='\033[1m'
 # ==========================================
 
 print_header() {
-    echo -e "${BOLD}${BLUE}AI Assistant${NC} v${VERSION}"
+    echo -e "${BOLD}${BLUE}Pauly${NC} v${VERSION}"
     echo ""
 }
 
@@ -51,7 +51,7 @@ print_info() {
 
 cmd_help() {
     print_header
-    echo "Usage: ai-assistant <command> [options]"
+    echo "Usage: pauly <command> [options]"
     echo ""
     echo "Commands:"
     echo "  ${BOLD}run${NC} <job> [-bg]  Run a job manually (summary, git, research, all)"
@@ -76,14 +76,14 @@ cmd_help() {
     echo "  -bg, --background    Run in background (persists after SSH disconnect)"
     echo ""
     echo "Examples:"
-    echo "  ai-assistant run summary        # Run daily summary now"
-    echo "  ai-assistant run all -bg        # Run all jobs in background"
-    echo "  ai-assistant tail research      # Follow research logs live"
-    echo "  ai-assistant logs git           # View git health check logs"
+    echo "  pauly run summary        # Run daily summary now"
+    echo "  pauly run all -bg        # Run all jobs in background"
+    echo "  pauly tail research      # Follow research logs live"
+    echo "  pauly logs git           # View git health check logs"
 }
 
 cmd_version() {
-    echo "ai-assistant v${VERSION}"
+    echo "pauly v${VERSION}"
 }
 
 cmd_status() {
@@ -130,7 +130,7 @@ cmd_status() {
             print_success "Email configured"
         fi
     else
-        print_error "Email not configured (run: ai-assistant setup)"
+        print_error "Email not configured (run: pauly setup)"
     fi
 }
 
@@ -165,7 +165,7 @@ cmd_run() {
             ;;
         -bg|--background)
             print_error "Please specify a job before -bg flag"
-            echo "Example: ai-assistant run all -bg"
+            echo "Example: pauly run all -bg"
             exit 1
             ;;
         "")
@@ -190,7 +190,7 @@ cmd_run_background() {
         local old_pid=$(cat "$pid_file")
         if kill -0 "$old_pid" 2>/dev/null; then
             print_warning "A background job is already running (PID: $old_pid)"
-            echo "View progress: ai-assistant tail"
+            echo "View progress: pauly tail"
             echo "Or kill it: kill $old_pid"
             return 1
         fi
@@ -236,8 +236,8 @@ cmd_run_background() {
     echo "The job will continue running after you disconnect."
     echo ""
     echo "Monitor progress:"
-    echo "  ai-assistant tail           # Follow logs live"
-    echo "  ai-assistant logs           # View recent logs"
+    echo "  pauly tail           # Follow logs live"
+    echo "  pauly logs           # View recent logs"
     echo "  kill $bg_pid                # Stop the job"
 }
 
@@ -393,7 +393,7 @@ cmd_disable() {
 cmd_test_email() {
     print_info "Sending test email to $EMAIL..."
 
-    if echo "This is a test email from your AI Assistant setup." | mail -s "AI Assistant Test - $(date '+%Y-%m-%d %H:%M')" "$EMAIL" 2>/dev/null; then
+    if echo "This is a test email from your Pauly setup." | mail -s "Pauly Test - $(date '+%Y-%m-%d %H:%M')" "$EMAIL" 2>/dev/null; then
         print_success "Test email sent to $EMAIL"
     else
         print_error "Failed to send email. Check your ~/.msmtprc configuration."
@@ -463,7 +463,7 @@ case "${1:-help}" in
         ;;
     *)
         print_error "Unknown command: $1"
-        echo "Run 'ai-assistant help' for usage."
+        echo "Run 'pauly help' for usage."
         exit 1
         ;;
 esac

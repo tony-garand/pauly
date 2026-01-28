@@ -1,4 +1,4 @@
-# AI Assistant
+# Pauly
 
 A CLI tool for running automated AI-powered tasks on a dedicated Mac Mini (or any Mac). Includes daily summaries, git health checks, and competitive project analysis.
 
@@ -9,28 +9,28 @@ A CLI tool for running automated AI-powered tasks on a dedicated Mac Mini (or an
 sudo ./setup-mac-mini.sh
 
 # Add CLI to PATH
-sudo ln -sf ~/Projects/ai-assistant/ai-assistant /usr/local/bin/ai-assistant
+sudo ln -sf ~/Projects/pauly/pauly /usr/local/bin/pauly
 
 # Configure email (required for notifications)
 nano ~/.msmtprc  # Add your Gmail app password
 
 # Test it
-ai-assistant test-email
-ai-assistant run summary
+pauly test-email
+pauly run summary
 ```
 
 ## Commands
 
 ```
-ai-assistant run <job> [-bg]   Run a job (summary, git, research, all)
-ai-assistant status            Show status of all scheduled jobs
-ai-assistant logs [job]        View logs
-ai-assistant tail [job]        Follow logs in real-time
-ai-assistant enable <job>      Enable a scheduled job
-ai-assistant disable <job>     Disable a scheduled job
-ai-assistant test-email        Send a test email
-ai-assistant setup             Run Mac Mini setup
-ai-assistant config            Edit configuration
+pauly run <job> [-bg]   Run a job (summary, git, research, all)
+pauly status            Show status of all scheduled jobs
+pauly logs [job]        View logs
+pauly tail [job]        Follow logs in real-time
+pauly enable <job>      Enable a scheduled job
+pauly disable <job>     Disable a scheduled job
+pauly test-email        Send a test email
+pauly setup             Run Mac Mini setup
+pauly config            Edit configuration
 ```
 
 ## Scheduled Jobs
@@ -45,20 +45,20 @@ ai-assistant config            Edit configuration
 
 ```bash
 # Run in foreground (stops if you disconnect SSH)
-ai-assistant run summary
+pauly run summary
 
 # Run in background (persists after SSH disconnect)
-ai-assistant run all -bg
+pauly run all -bg
 
 # Monitor background job
-ai-assistant tail
+pauly tail
 ```
 
 ## Project Structure
 
 ```
-ai-assistant/
-├── ai-assistant                    # CLI tool
+pauly/
+├── pauly                    # CLI tool
 ├── daily-claude-summary.sh         # Daily activity summary
 ├── git-health-check.sh             # Git repo health check
 ├── project-research.sh             # Competitive analysis
@@ -126,14 +126,14 @@ MAX_LOG_FILES=5                   # Number of rotated logs to keep
 
 **Check job status:**
 ```bash
-ai-assistant status
+pauly status
 launchctl list | grep com.user
 ```
 
 **View logs:**
 ```bash
-ai-assistant logs summary
-ai-assistant tail git
+pauly logs summary
+pauly tail git
 ```
 
 **Test email:**
@@ -143,8 +143,8 @@ echo "test" | mail -s "Test" your-email@gmail.com
 
 **Reload a job after editing plist:**
 ```bash
-ai-assistant disable summary
-ai-assistant enable summary
+pauly disable summary
+pauly enable summary
 ```
 
 ## Requirements
