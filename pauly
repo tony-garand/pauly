@@ -8,6 +8,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/common.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/lib/dev.sh" 2>/dev/null || true
 
 VERSION="1.0.0"
 CRON_MARKER="# pauly-job"
@@ -56,6 +57,7 @@ cmd_help() {
     echo ""
     echo "Commands:"
     echo "  ${BOLD}run${NC} <job> [-bg]  Run a job manually (summary, git, research, all)"
+    echo "  ${BOLD}dev${NC} [opts]       Autonomous development mode"
     echo "  ${BOLD}status${NC}           Show status of all scheduled jobs"
     echo "  ${BOLD}logs${NC} [job]       View logs (optionally for specific job)"
     echo "  ${BOLD}tail${NC} [job]       Follow logs in real-time"
@@ -75,14 +77,28 @@ cmd_help() {
     echo "  tasks      Check inbox for email tasks (every 5 min)"
     echo "  all        Run all jobs sequentially"
     echo ""
+    echo "Dev Commands:"
+    echo "  pauly dev [n]              Run n iterations of PLAN->EXECUTE->REVIEW->FIX"
+    echo "  pauly dev init <idea.md>   Bootstrap project from idea file"
+    echo "  pauly dev refresh <notes>  Add tasks from freeform notes"
+    echo "  pauly dev task \"desc\"      Run isolated single-task mode"
+    echo "  pauly dev status           Show development progress"
+    echo ""
+    echo "Dev Options:"
+    echo "  -n <num>                   Max iterations (default 25)"
+    echo "  --branch <name>            Use custom branch name (task mode)"
+    echo "  --no-pr                    Skip PR creation (task mode)"
+    echo "  -f, --file <file>          Read task from file (task mode)"
+    echo ""
     echo "Options:"
     echo "  -bg, --background    Run in background (persists after SSH disconnect)"
     echo ""
     echo "Examples:"
-    echo "  pauly run summary        # Run daily summary now"
-    echo "  pauly run all -bg        # Run all jobs in background"
-    echo "  pauly tail research      # Follow research logs live"
-    echo "  pauly logs git           # View git health check logs"
+    echo "  pauly run summary          # Run daily summary now"
+    echo "  pauly run all -bg          # Run all jobs in background"
+    echo "  pauly dev init idea.md     # Start new project from idea"
+    echo "  pauly dev 10               # Run 10 dev iterations"
+    echo "  pauly dev task \"fix bug\"   # Work on isolated task"
 }
 
 cmd_version() {
@@ -497,6 +513,76 @@ cmd_config() {
     esac
 }
 
+cmd_dev() {
+    ensure_claude_dev || exit 1
+
+    local subcommand="${1:-}"
+    shift 2>/dev/null || true
+
+    case "$subcommand" in
+        init)
+            local idea_file="${1:-}"
+            if [[ -z "$idea_file" ]]; then
+                print_error "Please specify an idea file"
+                echo "Usage: pauly dev init <idea.md>"
+                exit 1
+            fi
+            dev_init "$idea_file"
+            ;;
+
+        refresh)
+            local notes_file="${1:-notes.md}"
+            dev_refresh "$notes_file"
+            ;;
+
+        task)
+            local task_desc=""
+            local branch_name=""
+            local no_pr=false
+            local max_iter=25
+            local task_file=""
+
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --branch) branch_name="$2"; shift 2 ;;
+                    --no-pr) no_pr=true; shift ;;
+                    -n) max_iter="$2"; shift 2 ;;
+                    -f|--file) task_file="$2"; shift 2 ;;
+                    *) task_desc="$1"; shift ;;
+                esac
+            done
+
+            dev_task "$task_desc" "$branch_name" "$no_pr" "$max_iter" "$task_file"
+            ;;
+
+        status|st)
+            dev_status
+            ;;
+
+        ""|[0-9]*)
+            # Default: run main loop
+            local max_iter="${subcommand:-25}"
+            if [[ "$max_iter" =~ ^[0-9]+$ ]]; then
+                dev_loop "$max_iter"
+            else
+                print_error "Invalid iteration count: $max_iter"
+                exit 1
+            fi
+            ;;
+
+        *)
+            # Check if it's a number passed with other args
+            if [[ "$subcommand" =~ ^[0-9]+$ ]]; then
+                dev_loop "$subcommand"
+            else
+                print_error "Unknown dev command: $subcommand"
+                echo "Run 'pauly dev help' or 'pauly help' for usage"
+                exit 1
+            fi
+            ;;
+    esac
+}
+
 # ==========================================
 # Main
 # ==========================================
@@ -504,6 +590,10 @@ cmd_config() {
 case "${1:-help}" in
     run)
         cmd_run "$2" "$3"
+        ;;
+    dev)
+        shift
+        cmd_dev "$@"
         ;;
     status|st)
         cmd_status
