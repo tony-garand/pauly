@@ -129,8 +129,13 @@ run_claude_dev() {
 }
 
 #------------------------------------------------------------------------------
-# PROMPTS
+# PROMPTS (loaded lazily to avoid issues on older bash)
 #------------------------------------------------------------------------------
+
+load_dev_prompts() {
+    # Only load once
+    [ -n "$PROMPTS_LOADED" ] && return 0
+    PROMPTS_LOADED=1
 
 read -r -d '' PLAN_PROMPT << 'PLAN_EOF' || true
 # PLAN STEP
@@ -251,6 +256,7 @@ Read ISSUES from .task file. Fix them in priority order.
 
 If tests still fail after fix, note what else might be wrong.
 FIX_EOF
+}
 
 #------------------------------------------------------------------------------
 # COMMANDS
@@ -363,6 +369,8 @@ $notes_content
 
 # Main development loop
 dev_loop() {
+    load_dev_prompts
+
     local max_iterations="${1:-25}"
     local iteration=1
     local start_time=$(date +%s)
