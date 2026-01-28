@@ -32,6 +32,7 @@ pauly setup             Run full setup wizard
 | `summary` | 5:00am daily | Summarizes Claude Code activity from the last 24 hours |
 | `git` | 6:00am daily | Checks all repos for uncommitted changes, unpushed commits, stale branches |
 | `research` | 7:00am Mondays | Analyzes projects and finds similar tools/improvements |
+| `tasks` | Every 5 min | Checks inbox for email tasks and executes them |
 
 Enable/disable jobs:
 ```bash
@@ -87,6 +88,7 @@ Configuration files:
 ├── daily-claude-summary.sh         # Daily activity summary
 ├── git-health-check.sh             # Git repo health check
 ├── project-research.sh             # Competitive analysis
+├── check-email-tasks.sh            # Email task processor
 ├── lib/
 │   ├── common.sh                   # Shared functions
 │   └── config.sh                   # Configuration management
@@ -95,8 +97,43 @@ Configuration files:
     └── research/                   # Cached research results
 ```
 
+## Email Tasks
+
+Send tasks to Pauly via email and get results back automatically.
+
+### Setup
+
+1. Run `pauly config` and enable email tasks when prompted
+2. Enable the tasks job: `pauly enable tasks`
+
+### Usage
+
+Send an email to your configured address with:
+- **Subject** starting with `[PAULY]` (configurable)
+- **Body** containing the task you want executed
+
+Example:
+```
+To: your-email@gmail.com
+Subject: [PAULY] Update dependencies
+
+Check all my projects for outdated npm dependencies
+and create a summary of what needs updating.
+```
+
+Pauly will:
+1. Check your inbox every 5 minutes
+2. Execute the task via Claude
+3. Reply with the results
+
+### Security
+
+- Only emails from allowed senders are processed (configured during setup)
+- Tasks are executed in the context of your projects directory
+
 ## Features
 
+- **Email-driven tasks** - Send tasks via email, get results back
 - **Cron-based scheduling** - Works on any Unix system
 - **Interactive configuration** - No manual file editing
 - **Automatic log rotation** - Logs rotate at 10MB, keeps 5 files
@@ -132,6 +169,6 @@ pauly enable summary
 ## Requirements
 
 - macOS or Linux
-- Homebrew (macOS) or apt (Linux)
+- Python 3 (for email tasks)
 - Claude CLI (`claude`)
 - Gmail account (for notifications)

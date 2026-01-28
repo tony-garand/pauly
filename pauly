@@ -72,6 +72,7 @@ cmd_help() {
     echo "  summary    Daily Claude activity summary (5am)"
     echo "  git        Git repository health check (6am)"
     echo "  research   Project competitive analysis (Mondays 7am)"
+    echo "  tasks      Check inbox for email tasks (every 5 min)"
     echo "  all        Run all jobs sequentially"
     echo ""
     echo "Options:"
@@ -112,6 +113,12 @@ cmd_status() {
         echo -e "  ${GREEN}●${NC} ${BOLD}research${NC} - 7:00am Mondays"
     else
         echo -e "  ${RED}○${NC} ${BOLD}research${NC} - 7:00am Mondays (disabled)"
+    fi
+
+    if echo "$current_cron" | grep -q "$CRON_MARKER:tasks"; then
+        echo -e "  ${GREEN}●${NC} ${BOLD}tasks${NC}    - every 5 minutes"
+    else
+        echo -e "  ${RED}○${NC} ${BOLD}tasks${NC}    - every 5 minutes (disabled)"
     fi
 
     echo ""
@@ -176,6 +183,10 @@ cmd_run() {
         research|competitive)
             print_info "Running project research..."
             "$SCRIPT_DIR/project-research.sh"
+            ;;
+        tasks|email)
+            print_info "Checking for email tasks..."
+            "$SCRIPT_DIR/check-email-tasks.sh"
             ;;
         all)
             print_info "Running all jobs..."
@@ -356,6 +367,11 @@ cmd_enable() {
             cron_schedule="0 7 * * 1"  # 7am Mondays
             script_path="$SCRIPT_DIR/project-research.sh"
             ;;
+        tasks|email)
+            job="tasks"
+            cron_schedule="*/5 * * * *"  # Every 5 minutes
+            script_path="$SCRIPT_DIR/check-email-tasks.sh"
+            ;;
         all)
             cmd_enable "summary"
             cmd_enable "git"
@@ -406,10 +422,14 @@ cmd_disable() {
         research|competitive)
             job="research"
             ;;
+        tasks|email)
+            job="tasks"
+            ;;
         all)
             cmd_disable "summary"
             cmd_disable "git"
             cmd_disable "research"
+            cmd_disable "tasks"
             return
             ;;
         "")

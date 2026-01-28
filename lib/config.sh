@@ -18,7 +18,13 @@ DEFAULT_SMTP_PORT=587
 DEFAULT_SMTP_USER=""
 DEFAULT_SMTP_PASSWORD=""
 
-# SMTP config file
+# IMAP defaults (for receiving task emails)
+DEFAULT_IMAP_HOST="imap.gmail.com"
+DEFAULT_IMAP_PORT=993
+DEFAULT_ALLOWED_SENDERS=""
+DEFAULT_TASK_SUBJECT_PREFIX="[PAULY]"
+
+# Config files
 MSMTP_CONFIG="$HOME/.msmtprc"
 
 # ==========================================
@@ -44,6 +50,12 @@ load_config() {
     SMTP_PORT="${DEFAULT_SMTP_PORT}"
     SMTP_USER="${DEFAULT_SMTP_USER}"
     SMTP_PASSWORD="${DEFAULT_SMTP_PASSWORD}"
+
+    # IMAP defaults
+    IMAP_HOST="${DEFAULT_IMAP_HOST}"
+    IMAP_PORT="${DEFAULT_IMAP_PORT}"
+    ALLOWED_SENDERS="${DEFAULT_ALLOWED_SENDERS}"
+    TASK_SUBJECT_PREFIX="${DEFAULT_TASK_SUBJECT_PREFIX}"
 
     # Load from file if exists
     if [ -f "$CONFIG_FILE" ]; then
@@ -76,6 +88,12 @@ SMTP_HOST="$SMTP_HOST"
 SMTP_PORT=$SMTP_PORT
 SMTP_USER="$SMTP_USER"
 SMTP_PASSWORD="$SMTP_PASSWORD"
+
+# IMAP Configuration (for email tasks)
+IMAP_HOST="$IMAP_HOST"
+IMAP_PORT=$IMAP_PORT
+ALLOWED_SENDERS="$ALLOWED_SENDERS"
+TASK_SUBJECT_PREFIX="$TASK_SUBJECT_PREFIX"
 EOF
 
     chmod 600 "$CONFIG_FILE"
@@ -204,6 +222,27 @@ run_config_wizard() {
     fi
     echo ""
 
+    # Email Tasks Configuration
+    if prompt_yes_no "Enable email tasks? (send tasks via email)" "n"; then
+        echo ""
+        echo "Email Tasks Configuration"
+        echo "-------------------------"
+        echo "Send emails with subject starting with '$TASK_SUBJECT_PREFIX'"
+        echo "to have Pauly execute tasks automatically."
+        echo ""
+
+        IMAP_HOST=$(prompt_value "IMAP host" "$IMAP_HOST")
+        IMAP_PORT=$(prompt_value "IMAP port" "$IMAP_PORT")
+
+        # Default allowed senders to the configured email
+        local allowed_default="${ALLOWED_SENDERS:-$EMAIL}"
+        echo "Comma-separated list of email addresses allowed to send tasks."
+        ALLOWED_SENDERS=$(prompt_value "Allowed senders" "$allowed_default")
+
+        TASK_SUBJECT_PREFIX=$(prompt_value "Task subject prefix" "$TASK_SUBJECT_PREFIX")
+        echo ""
+    fi
+
     # Advanced settings
     if prompt_yes_no "Configure advanced settings?" "n"; then
         echo ""
@@ -270,6 +309,15 @@ show_config() {
     echo "Logs:"
     echo "  Max size:     ${MAX_LOG_SIZE_MB}MB"
     echo "  Keep files:   $MAX_LOG_FILES"
+
+    if [ -n "$ALLOWED_SENDERS" ]; then
+        echo ""
+        echo "Email Tasks:"
+        echo "  IMAP:         $IMAP_HOST:$IMAP_PORT"
+        echo "  Allowed:      $ALLOWED_SENDERS"
+        echo "  Prefix:       $TASK_SUBJECT_PREFIX"
+    fi
+
     if [ -n "$HEALTHCHECK_URL" ]; then
         echo ""
         echo "Monitoring:"
