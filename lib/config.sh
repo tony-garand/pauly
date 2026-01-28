@@ -221,26 +221,30 @@ run_config_wizard() {
     # SMTP Configuration
     echo "SMTP Configuration (account to SEND emails from)"
     echo "-------------------------------------------------"
-    echo "Default is Gmail. Get an app password at:"
-    echo "https://myaccount.google.com/apppasswords"
     echo ""
-
-    SMTP_HOST=$(prompt_value "SMTP host" "$SMTP_HOST")
-    SMTP_PORT=$(prompt_value "SMTP port" "$SMTP_PORT")
 
     # Default SMTP user to email if not set
     local smtp_user_default="${SMTP_USER:-$EMAIL}"
-    SMTP_USER=$(prompt_value "Send from (email)" "$smtp_user_default")
+    SMTP_USER=$(prompt_value "Gmail address to send from" "$smtp_user_default")
+
+    echo ""
+    echo "Get an app password at: https://myaccount.google.com/apppasswords"
+    echo "App password looks like: xxxx xxxx xxxx xxxx (16 chars with spaces)"
 
     # Password prompt (hidden input)
     if [ -n "$SMTP_PASSWORD" ]; then
-        echo "SMTP password is already set."
-        if prompt_yes_no "Change password?" "n"; then
-            SMTP_PASSWORD=$(prompt_password "SMTP password (app password)")
+        echo "App password is already set."
+        if prompt_yes_no "Change app password?" "n"; then
+            SMTP_PASSWORD=$(prompt_password "App password")
         fi
     else
-        SMTP_PASSWORD=$(prompt_password "SMTP password (app password)")
+        SMTP_PASSWORD=$(prompt_password "App password")
     fi
+
+    echo ""
+    echo "SMTP server settings (press Enter to accept defaults for Gmail):"
+    SMTP_HOST=$(prompt_value "SMTP host" "$SMTP_HOST")
+    SMTP_PORT=$(prompt_value "SMTP port" "$SMTP_PORT")
     echo ""
 
     # Email Tasks Configuration
@@ -266,8 +270,9 @@ run_config_wizard() {
         echo "Dev Mode via Email"
         echo "------------------"
         echo "To use 'pauly dev' commands via email, specify the project directory."
+        echo "Use full path (e.g., /Users/username/Projects, not ~/Projects)"
         echo "Leave empty to disable email-triggered dev mode."
-        DEV_PROJECT_DIR=$(prompt_value "Dev project directory" "$DEV_PROJECT_DIR")
+        DEV_PROJECT_DIR=$(prompt_value "Dev project directory" "${DEV_PROJECT_DIR:-$PROJECTS_DIR}")
         echo ""
     fi
 
@@ -279,14 +284,16 @@ run_config_wizard() {
         echo "Create issues in a repo to trigger Pauly tasks."
         echo "Use labels like 'project:myapp' to target specific projects."
         echo ""
-        echo "Repository format: owner/repo (e.g., tony-garand/pauly-tasks)"
-        GITHUB_TASKS_REPO=$(prompt_value "GitHub tasks repo" "$GITHUB_TASKS_REPO")
+        echo "Enter repo as: owner/repo (NOT the full URL)"
+        echo "Example: tony-garand/pauly-tasks"
+        GITHUB_TASKS_REPO=$(prompt_value "GitHub repo (owner/repo)" "$GITHUB_TASKS_REPO")
         GITHUB_TASKS_LABEL=$(prompt_value "Label to watch for" "$GITHUB_TASKS_LABEL")
         echo ""
 
         if [ -z "$DEV_PROJECT_DIR" ]; then
             echo "Default project directory for tasks without a project label."
-            DEV_PROJECT_DIR=$(prompt_value "Default project directory" "$DEV_PROJECT_DIR")
+            echo "Use full path (e.g., /Users/username/Projects, not ~/Projects)"
+            DEV_PROJECT_DIR=$(prompt_value "Default project directory" "${DEV_PROJECT_DIR:-$PROJECTS_DIR}")
             echo ""
         fi
     fi
