@@ -138,24 +138,27 @@ load_dev_prompts() {
     PROMPTS_LOADED=1
 
 read -r -d '' PLAN_PROMPT << 'PLAN_EOF' || true
-# PLAN STEP
+# PLAN STEP - Create .task file
 
 You are planning ONE task from TASKS.md.
+
+## CRITICAL: You MUST create a .task file
+Use the Write tool to create a file named ".task" in the current directory.
+If you don't create this file, the automation will fail.
 
 ## Your Job
 1. Read CONTEXT.md for project info and commands
 2. Read TASKS.md - find the FIRST unchecked '- [ ]' task
    - **CRITICAL**: Only plan tasks marked '- [ ]' (unchecked)
    - Skip any task marked '- [x]' (already complete)
-3. **Parse the task**: Extract ACTION and OUTCOME (format: 'Action - Outcome')
-4. Search the codebase for existing patterns, utilities, components
-5. Write a plan to .task file
+3. Search the codebase for existing patterns, utilities, components
+4. **USE THE WRITE TOOL** to create .task file with the plan
 
 ## STOP: Verify Task Is Actually Unchecked
 Before planning, CONFIRM the task line starts with '- [ ]' (space between brackets).
-If it starts with '- [x]', it's ALREADY DONE - do not plan it.
+If it starts with '- [x]', it's ALREADY DONE - find the next unchecked task.
 
-## Write to .task file:
+## .task file format (MUST create this file):
 
 TASK: [exact task text from TASKS.md]
 ACTION: [what to implement]
@@ -171,27 +174,30 @@ PLAN:
 1. [specific step]
 2. [specific step]
 
-FILES_TO_CREATE: [list]
+FILES_TO_CREATE: [list or "none"]
 FILES_TO_MODIFY: [list]
 TEST_COMMAND: [from CONTEXT.md or detected]
 
 OUTCOME_VERIFICATION:
 - [specific check to confirm outcome]
-- [curl command, file check, or code inspection]
 
-## Architecture Principles
+## Rules
 - REUSE existing code - search first
-- EXTEND existing files when logical
 - Follow existing patterns in codebase
-- Match existing code style
-
-DO NOT implement. Just plan.
+- DO NOT implement - just plan
+- DO NOT delete or modify .task if it exists (read it first)
+- **YOU MUST USE Write tool to create .task file**
 PLAN_EOF
 
 read -r -d '' EXECUTE_PROMPT << 'EXEC_EOF' || true
-# EXECUTE STEP
+# EXECUTE STEP - Implement the plan
 
-Read .task file. Follow the plan exactly.
+A .task file exists with the plan. Read it first, then implement.
+
+## CRITICAL: First Steps
+1. Read the .task file to see what needs to be done
+2. The .task file contains: TASK, ACTION, PLAN steps, FILES_TO_MODIFY
+3. Follow the PLAN steps exactly
 
 ## Rules
 - Follow the PLAN steps in order
@@ -199,62 +205,74 @@ Read .task file. Follow the plan exactly.
 - Follow PATTERNS for consistency
 - Match existing code style in the project
 - Handle errors meaningfully
+- **DO NOT delete .task file** - it's needed for review
 
-## When Done
-Mark the task complete in TASKS.md:
-- Simple completion: '- [x] Task description'
-- With note: '- [x] Task description - Note: [insight]'
+## When Implementation Done
+1. Mark the task complete in TASKS.md: change '- [ ]' to '- [x]'
+2. Commit changes: "feat: [brief task description]"
+3. DO NOT delete .task - the review step needs it
 
-Then commit: "feat: [task description]"
+If .task file doesn't exist, say "ERROR: No .task file found" and stop.
 EXEC_EOF
 
 read -r -d '' REVIEW_PROMPT << 'REVIEW_EOF' || true
-# REVIEW STEP
+# REVIEW STEP - Verify implementation
 
-Review implementation against .task plan.
+A .task file exists with the plan and expected outcome. Review against it.
 
-## 1. VERIFY OUTCOME FIRST
-Read EXPECTED_OUTCOME and OUTCOME_VERIFICATION from .task file.
-Actually run the verification steps to confirm the outcome was achieved.
+## CRITICAL: First Steps
+1. Read the .task file - it contains the plan and EXPECTED_OUTCOME
+2. If .task doesn't exist, say "ERROR: No .task file found" and stop
 
-**If outcome NOT achieved**: This is a BLOCKER - the task isn't done.
+## Verification Steps
+1. Read EXPECTED_OUTCOME and OUTCOME_VERIFICATION from .task
+2. Actually run the verification steps (compile, test, inspect)
+3. Run TEST_COMMAND from .task file
+4. Check that the task was marked complete in TASKS.md
 
-## 2. Test Verification
-Run the TEST_COMMAND from .task file.
-- Check for compilation errors
-- Check for test failures
+## After Verification
+Use the Edit tool to APPEND to the .task file (don't overwrite):
 
-## 3. Code Quality
-- Patterns followed from .task?
-- Code reused as planned?
-
-## Output Format
-Append to .task file:
-
+---
 REVIEW_RESULT: [PASS or FAIL]
-OUTCOME_VERIFIED: [yes/no]
+OUTCOME_VERIFIED: [yes/no - did the expected outcome happen?]
 ISSUES:
 - [specific issue or "None"]
 FIX_PRIORITY:
-1. [most critical]
-2. [test failures]
+1. [most critical issue]
 
-If PASS: Say "Review complete - no issues found"
-If FAIL: List specific issues to fix
+## Output
+- If PASS: Say "REVIEW_RESULT: PASS - no issues found"
+- If FAIL: List the specific issues that need fixing
+
+DO NOT delete .task file.
 REVIEW_EOF
 
 read -r -d '' FIX_PROMPT << 'FIX_EOF' || true
-# FIX STEP
+# FIX STEP - Address review issues
 
-Read ISSUES from .task file. Fix them in priority order.
+The .task file contains ISSUES from the review. Fix them.
 
-## Rules
-1. Fix ONLY listed issues
-2. Re-verify outcome after fixes
-3. Run tests after changes
-4. Update .task with FIX_APPLIED: [what you fixed]
+## CRITICAL: First Steps
+1. Read the .task file to see the ISSUES and FIX_PRIORITY
+2. If .task doesn't exist, say "ERROR: No .task file found" and stop
 
-If tests still fail after fix, note what else might be wrong.
+## Fix Process
+1. Fix issues in FIX_PRIORITY order (most critical first)
+2. Run tests after each fix
+3. Re-verify the EXPECTED_OUTCOME from .task
+
+## After Fixing
+Append to .task file:
+
+FIX_APPLIED: [what you fixed]
+TESTS_PASS: [yes/no]
+
+## Output
+- If fixed successfully: Say "FIX_APPLIED: [description]"
+- If still failing: Describe what's still wrong
+
+DO NOT delete .task file.
 FIX_EOF
 }
 
@@ -393,6 +411,9 @@ dev_loop() {
             echo -e "${BLUE}  Remaining tasks: $unchecked${NC}"
         fi
 
+        # Clean up any stale .task file from previous iterations
+        rm -f "$TASK_STATE"
+
         # PLAN
         echo -e "${CYAN}[PLAN]${NC}"
         run_claude_dev "$PLAN_PROMPT" "PLAN" || {
@@ -401,11 +422,18 @@ dev_loop() {
             break
         }
 
-        # Check if .task was created
+        # Check if .task was created and has required content
         if [[ ! -f "$TASK_STATE" ]]; then
             echo -e "${YELLOW}No .task file created - may be done${NC}"
             send_dev_notification "complete" "$iteration" "$start_time"
             break
+        fi
+
+        # Validate .task has required fields
+        if ! grep -q "^TASK:" "$TASK_STATE" 2>/dev/null; then
+            echo -e "${RED}.task file missing TASK: field - invalid plan${NC}"
+            rm -f "$TASK_STATE"
+            continue
         fi
 
         # EXECUTE
