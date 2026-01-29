@@ -170,8 +170,24 @@ ensure_homebrew() {
 }
 
 ensure_claude() {
-    if ! command -v claude &> /dev/null; then
-        log_error "Claude CLI not found"
-        return 1
+    if command -v claude &> /dev/null; then
+        return 0
     fi
+
+    # Check common locations (cron doesn't have full PATH)
+    local claude_paths=(
+        "$HOME/.local/bin/claude"
+        "/usr/local/bin/claude"
+        "$HOME/.claude/local/claude"
+    )
+
+    for path in "${claude_paths[@]}"; do
+        if [ -x "$path" ]; then
+            export PATH="$(dirname "$path"):$PATH"
+            return 0
+        fi
+    done
+
+    log_error "Claude CLI not found"
+    return 1
 }
