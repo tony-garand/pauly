@@ -64,6 +64,7 @@ cmd_help() {
     echo "Commands:"
     echo -e "  ${BOLD}run${NC} <job> [-bg]  Run a job manually (summary, git, research, all)"
     echo -e "  ${BOLD}dev${NC} [opts]       Autonomous development mode"
+    echo -e "  ${BOLD}admin${NC} [cmd]      Manage admin dashboard (start/stop/status)"
     echo -e "  ${BOLD}status${NC}           Show status of all scheduled jobs"
     echo -e "  ${BOLD}logs${NC} [job]       View logs (optionally for specific job)"
     echo -e "  ${BOLD}tail${NC} [job]       Follow logs in real-time"
@@ -592,6 +593,113 @@ cmd_autofix() {
     esac
 }
 
+cmd_admin() {
+    local subcommand="${1:-start}"
+    local admin_dir="$HOME/Projects/Pauly"
+    local pid_file="$SCRIPT_DIR/logs/admin.pid"
+    local admin_log="$SCRIPT_DIR/logs/admin.log"
+
+    case "$subcommand" in
+        start|"")
+            # Check if already running
+            if [ -f "$pid_file" ]; then
+                local old_pid=$(cat "$pid_file")
+                if kill -0 "$old_pid" 2>/dev/null; then
+                    print_warning "Admin dashboard is already running (PID: $old_pid)"
+                    echo "View at: http://localhost:3001"
+                    echo "Stop with: pauly admin stop"
+                    return 0
+                fi
+            fi
+
+            # Check if admin dashboard is built
+            if [ ! -d "$admin_dir/admin/server/dist" ]; then
+                print_error "Admin dashboard not built. Run 'cd $admin_dir && pnpm build' first."
+                exit 1
+            fi
+
+            print_info "Starting Pauly Admin Dashboard..."
+
+            # Start the server in background
+            (
+                cd "$admin_dir/admin/server"
+                node dist/index.js >> "$admin_log" 2>&1
+            ) &
+
+            local server_pid=$!
+            echo "$server_pid" > "$pid_file"
+            disown "$server_pid"
+
+            # Wait a moment for server to start
+            sleep 1
+
+            # Check if it started successfully
+            if kill -0 "$server_pid" 2>/dev/null; then
+                print_success "Admin dashboard started (PID: $server_pid)"
+                echo ""
+                echo "Dashboard: http://localhost:3001"
+                echo "Stop with: pauly admin stop"
+                echo "Logs: $admin_log"
+            else
+                print_error "Failed to start admin dashboard. Check $admin_log for errors."
+                rm -f "$pid_file"
+                exit 1
+            fi
+            ;;
+
+        stop)
+            if [ ! -f "$pid_file" ]; then
+                print_warning "Admin dashboard is not running"
+                return 0
+            fi
+
+            local pid=$(cat "$pid_file")
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid"
+                rm -f "$pid_file"
+                print_success "Admin dashboard stopped"
+            else
+                print_warning "Admin dashboard process not found (stale PID file)"
+                rm -f "$pid_file"
+            fi
+            ;;
+
+        status)
+            if [ -f "$pid_file" ]; then
+                local pid=$(cat "$pid_file")
+                if kill -0 "$pid" 2>/dev/null; then
+                    print_success "Admin dashboard is running (PID: $pid)"
+                    echo "Dashboard: http://localhost:3001"
+                else
+                    print_warning "Admin dashboard is not running (stale PID file)"
+                fi
+            else
+                print_info "Admin dashboard is not running"
+            fi
+            ;;
+
+        restart)
+            cmd_admin stop
+            sleep 1
+            cmd_admin start
+            ;;
+
+        logs)
+            if [ -f "$admin_log" ]; then
+                tail -100 "$admin_log"
+            else
+                print_warning "No admin logs found"
+            fi
+            ;;
+
+        *)
+            print_error "Unknown admin command: $subcommand"
+            echo "Usage: pauly admin [start|stop|status|restart|logs]"
+            exit 1
+            ;;
+    esac
+}
+
 cmd_dev() {
     ensure_claude_dev || exit 1
 
@@ -673,6 +781,9 @@ case "${1:-help}" in
     dev)
         shift
         cmd_dev "$@"
+        ;;
+    admin)
+        cmd_admin "$2"
         ;;
     status|st)
         cmd_status
