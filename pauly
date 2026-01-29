@@ -342,6 +342,11 @@ cmd_tail() {
         research|competitive)
             log_file="$SCRIPT_DIR/logs/project-research.log"
             ;;
+        tasks)
+            print_info "Following task logs (Ctrl+C to stop)"
+            tail -f "$SCRIPT_DIR/logs/github-tasks.log" "$SCRIPT_DIR/logs/email-tasks.log" 2>/dev/null
+            return
+            ;;
         ""|all)
             log_file="$SCRIPT_DIR/logs/background.log"
             ;;
@@ -373,6 +378,18 @@ cmd_logs() {
             ;;
         research|competitive)
             log_file="$SCRIPT_DIR/logs/project-research.log"
+            ;;
+        tasks)
+            echo -e "${BOLD}Task Logs:${NC}"
+            echo ""
+            for task_log in "$SCRIPT_DIR/logs/github-tasks.log" "$SCRIPT_DIR/logs/email-tasks.log"; do
+                if [ -f "$task_log" ]; then
+                    echo -e "${CYAN}=== $(basename "$task_log") ===${NC}"
+                    tail -50 "$task_log"
+                    echo ""
+                fi
+            done
+            return
             ;;
         *)
             print_error "Unknown job: $job"
