@@ -111,8 +111,17 @@ export function ProjectDetail() {
     try {
       const { jobId } = await createProjectIssue(name, issueTitle.trim(), issueBody.trim());
 
-      // Poll for completion
+      // Poll for completion with timeout
+      let pollCount = 0;
+      const maxPolls = 60; // 2 minutes max
       const pollInterval = setInterval(async () => {
+        pollCount++;
+        if (pollCount > maxPolls) {
+          clearInterval(pollInterval);
+          setCreatingIssue(false);
+          setError("Task generation timed out. Please try again.");
+          return;
+        }
         try {
           const status = await getIssueJobStatus(name, jobId);
           if (status.status !== "running") {
@@ -130,7 +139,10 @@ export function ProjectDetail() {
         } catch {
           clearInterval(pollInterval);
           setCreatingIssue(false);
-          setError("Failed to check issue status");
+          // Job not found likely means server restarted - just close the form
+          setIssueTitle("");
+          setIssueBody("");
+          setShowIssueForm(false);
         }
       }, 2000);
     } catch (err) {

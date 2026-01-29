@@ -376,42 +376,31 @@ export function createIssue(projectName: string, title: string, body: string): s
   const jobId = `${projectName}-${Date.now()}`;
   issueJobs.set(jobId, { status: "running", output: "" });
 
-  const prompt = `You are helping manage tasks for a project. Given this issue, generate a list of specific, actionable tasks.
+  // Run Claude in background
+  const prompt = `Break down this issue into specific tasks. Output ONLY markdown checkboxes.
 
-Issue Title: ${title}
+Issue: ${title}
+${body ? `Details: ${body}` : ""}
 
-Issue Description:
-${body}
+Output format (no other text):
+- [ ] Task 1
+- [ ] Task 2`;
 
-Output ONLY a markdown task list with checkboxes. Each task should be specific and actionable.
-Format each task as: - [ ] Task description
+  // Use setTimeout to run async
+  setTimeout(() => {
+    try {
+      const output = execFileSync("claude", [
+        "--print",
+        "--dangerously-skip-permissions",
+        "-p",
+        prompt
+      ], {
+        cwd: projectPath,
+        encoding: "utf-8",
+        timeout: 120000, // 2 minute timeout
+        env: { ...process.env, TERM: "dumb" }
+      });
 
-Do not include any other text, explanations, or headers. Just the task list.`;
-
-  const claude = spawn("claude", [
-    "--print",
-    "--dangerously-skip-permissions",
-    prompt
-  ], {
-    cwd: projectPath,
-    shell: true,
-    env: { ...process.env, TERM: "dumb" }
-  });
-
-  let output = "";
-
-  claude.stdout.on("data", (data) => {
-    output += data.toString();
-    issueJobs.set(jobId, { status: "running", output });
-  });
-
-  claude.stderr.on("data", (data) => {
-    output += data.toString();
-    issueJobs.set(jobId, { status: "running", output });
-  });
-
-  claude.on("close", (code) => {
-    if (code === 0) {
       // Parse the tasks from Claude's output
       const taskLines = output.split("\n").filter(line => line.match(/^\s*-\s*\[\s*\]/));
       const tasks = taskLines.map(line => {
@@ -419,37 +408,35 @@ Do not include any other text, explanations, or headers. Just the task list.`;
         return match ? match[1].trim() : "";
       }).filter(Boolean);
 
-      // Append tasks to TASKS.md
-      try {
-        let content = "";
-        if (existsSync(tasksPath)) {
-          content = readFileSync(tasksPath, "utf-8");
-        } else {
-          content = "# Tasks\n\n";
-        }
-
-        // Add section header for the issue
-        const issueSection = `\n## ${title}\n\n${taskLines.join("\n")}\n`;
-
-        if (content.endsWith("\n")) {
-          content += issueSection;
-        } else {
-          content += "\n" + issueSection;
-        }
-
-        writeFileSync(tasksPath, content);
-        issueJobs.set(jobId, { status: "success", output, tasks });
-      } catch (err) {
-        issueJobs.set(jobId, { status: "error", output: `Failed to write tasks: ${err}` });
+      if (tasks.length === 0) {
+        issueJobs.set(jobId, { status: "error", output: "No tasks generated. Response: " + output });
+        return;
       }
-    } else {
-      issueJobs.set(jobId, { status: "error", output });
-    }
-  });
 
-  claude.on("error", (err) => {
-    issueJobs.set(jobId, { status: "error", output: err.message });
-  });
+      // Append tasks to TASKS.md
+      let content = "";
+      if (existsSync(tasksPath)) {
+        content = readFileSync(tasksPath, "utf-8");
+      } else {
+        content = "# Tasks\n\n";
+      }
+
+      // Add section header for the issue
+      const issueSection = `\n## ${title}\n\n${taskLines.join("\n")}\n`;
+
+      if (content.endsWith("\n")) {
+        content += issueSection;
+      } else {
+        content += "\n" + issueSection;
+      }
+
+      writeFileSync(tasksPath, content);
+      issueJobs.set(jobId, { status: "success", output, tasks });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      issueJobs.set(jobId, { status: "error", output: errorMsg });
+    }
+  }, 0);
 
   return jobId;
 }
