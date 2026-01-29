@@ -433,6 +433,17 @@ dev_loop() {
             rm -f "$TASK_STATE"
         fi
 
+        # Commit and push changes after each iteration
+        if command -v git &> /dev/null && [[ -d .git ]]; then
+            if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+                echo -e "${BLUE}  Committing and pushing changes...${NC}"
+                git add -A
+                git commit -m "feat: iteration $iteration - automated development" 2>/dev/null || true
+                git push 2>/dev/null || git push -u origin "$(git branch --show-current)" 2>/dev/null || true
+                dev_log "INFO" "Changes committed and pushed for iteration $iteration"
+            fi
+        fi
+
         ((iteration++))
         echo ""
     done
@@ -501,12 +512,23 @@ If you encounter blockers, document them and say 'TASK BLOCKED: [reason]'."
             echo -e "${GREEN}Task completed!${NC}"
             completed=true
 
-            # Create PR if git/gh available and not disabled
+            # Always commit and push changes if git available
+            if command -v git &> /dev/null && [[ -d .git ]]; then
+                if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+                    echo -e "${BLUE}Committing and pushing changes...${NC}"
+                    git add -A
+                    git commit -m "feat: ${task_desc:0:50}" 2>/dev/null || true
+                    if [[ -n "$branch" ]]; then
+                        git push -u origin "$branch" 2>/dev/null || true
+                    else
+                        git push 2>/dev/null || git push -u origin "$(git branch --show-current)" 2>/dev/null || true
+                    fi
+                fi
+            fi
+
+            # Create PR if gh available and not disabled
             if [[ "$no_pr" != "true" ]] && command -v gh &> /dev/null && [[ -n "$branch" ]]; then
                 echo -e "${BLUE}Creating PR...${NC}"
-                git add -A
-                git commit -m "feat: ${task_desc:0:50}" 2>/dev/null || true
-                git push -u origin "$branch" 2>/dev/null || true
                 gh pr create --title "${task_desc:0:72}" --body "Automated task completion by Pauly
 
 ## Task
