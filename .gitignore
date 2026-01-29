@@ -1,0 +1,14 @@
+# Logs and cache
+logs/
+cache/
+
+# Node modules
+node_modules/
+
+# Build outputs (keep dist for deployment)
+# admin/client/dist/
+# admin/server/dist/
+
+# Environment files
+.env
+.env.local

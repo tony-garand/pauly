@@ -595,7 +595,7 @@ cmd_autofix() {
 
 cmd_admin() {
     local subcommand="${1:-start}"
-    local admin_dir="$HOME/Projects/Pauly"
+    local admin_dir="$SCRIPT_DIR/admin"
     local pid_file="$SCRIPT_DIR/logs/admin.pid"
     local admin_log="$SCRIPT_DIR/logs/admin.log"
 
@@ -613,7 +613,7 @@ cmd_admin() {
             fi
 
             # Check if admin dashboard is built
-            if [ ! -d "$admin_dir/admin/server/dist" ]; then
+            if [ ! -d "$admin_dir/server/dist" ]; then
                 print_error "Admin dashboard not built. Run 'cd $admin_dir && pnpm build' first."
                 exit 1
             fi
@@ -622,7 +622,7 @@ cmd_admin() {
 
             # Start the server in background
             (
-                cd "$admin_dir/admin/server"
+                cd "$admin_dir/server"
                 node dist/index.js >> "$admin_log" 2>&1
             ) &
 
