@@ -191,3 +191,25 @@ ensure_claude() {
     log_error "Claude CLI not found"
     return 1
 }
+
+ensure_gh() {
+    if command -v gh &> /dev/null; then
+        return 0
+    fi
+
+    # Check common locations (cron doesn't have full PATH)
+    local gh_paths=(
+        "/opt/homebrew/bin/gh"
+        "/usr/local/bin/gh"
+        "$HOME/.local/bin/gh"
+    )
+
+    for path in "${gh_paths[@]}"; do
+        if [ -x "$path" ]; then
+            export PATH="$(dirname "$path"):$PATH"
+            return 0
+        fi
+    done
+
+    return 1
+}

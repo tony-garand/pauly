@@ -12,7 +12,7 @@ GITHUB_TASKS_LABEL="${GITHUB_TASKS_LABEL:-pauly}"
 
 # Check if GitHub tasks are configured
 github_tasks_configured() {
-    [ -n "$GITHUB_TASKS_REPO" ] && command -v gh &>/dev/null
+    [ -n "$GITHUB_TASKS_REPO" ] && ensure_gh
 }
 
 # Extract project from labels (looks for project:name pattern)
