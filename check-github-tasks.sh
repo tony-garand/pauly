@@ -242,14 +242,51 @@ get_issue_lock_age() {
     fi
 }
 
+# Session tracking for project-scoped --continue
+# Only use --continue within the same project to avoid cross-project contamination
+SESSION_PROJECT_FILE="$SCRIPT_DIR/logs/.current-project-session"
+
+# Check if we can use --continue (same project as last session)
+can_continue_session() {
+    local current_project="$1"
+    if [[ -f "$SESSION_PROJECT_FILE" ]]; then
+        local last_project=$(cat "$SESSION_PROJECT_FILE" 2>/dev/null)
+        [[ "$last_project" == "$current_project" ]]
+    else
+        return 1
+    fi
+}
+
+# Mark current project as active session
+set_session_project() {
+    local project="$1"
+    echo "$project" > "$SESSION_PROJECT_FILE"
+}
+
+# Clear session when done with project
+clear_session_project() {
+    rm -f "$SESSION_PROJECT_FILE"
+}
+
 # Run tasks one by one from TASKS.md
-# Each task runs in a fresh session to avoid cross-issue context contamination
+# Uses --continue within the same project for efficiency, fresh sessions across projects
 run_tasks_from_file() {
     local work_dir="$1"
     local max_tasks="${2:-50}"
     local tasks_done=0
+    local first_task=true
 
     cd "$work_dir" || return 1
+
+    # Check if we're continuing in the same project or starting fresh
+    local use_continue=false
+    if can_continue_session "$work_dir"; then
+        use_continue=true
+        echo "Continuing session in same project..."
+    else
+        echo "Starting fresh session for project: $(basename "$work_dir")"
+        set_session_project "$work_dir"
+    fi
 
     while [[ $tasks_done -lt $max_tasks ]]; do
         # Get next uncompleted task
@@ -266,10 +303,11 @@ run_tasks_from_file() {
         echo "=== Task $tasks_done: $task ==="
         echo "Progress: $progress"
 
-        # Run Claude with the specific task (fresh session each time)
         local task_output=$(mktemp)
 
-        claude --dangerously-skip-permissions -p "You are working on a project with multiple tasks.
+        if [[ "$first_task" == "true" && "$use_continue" == "false" ]]; then
+            # First task in new project: fresh session with full context
+            claude --dangerously-skip-permissions -p "You are working on a project with multiple tasks.
 
 Read CONTEXT.md and TASKS.md to understand this project's:
 - Purpose and architecture
@@ -291,6 +329,35 @@ IMPORTANT:
 - Only work on THIS task, not other tasks
 - Mark the task done in TASKS.md when complete
 - If you can't complete it, explain why and leave it unchecked" 2>&1 | tee "$task_output"
+            first_task=false
+        else
+            # Subsequent tasks in same project: use --continue for efficiency
+            if ! claude --dangerously-skip-permissions --continue -p "Next task: $task
+
+Current progress: $progress
+
+Implement this task, test it works, mark it done in TASKS.md, and commit.
+Remember: only work on THIS task." 2>&1 | tee "$task_output"; then
+                # Fallback to fresh session if --continue fails
+                echo "Session continue failed, starting fresh..."
+                claude --dangerously-skip-permissions -p "You are resuming work on a project.
+
+Read CONTEXT.md and TASKS.md to understand this project.
+
+Current progress: $progress
+
+Implement this task:
+TASK: $task
+
+Instructions:
+1. Implement this specific task
+2. Test that it works
+3. Mark it done in TASKS.md: change '- [ ]' to '- [x]'
+4. Commit with message: \"feat: $task\"
+
+Only work on THIS task." 2>&1 | tee "$task_output"
+            fi
+        fi
 
         local output=$(cat "$task_output")
         rm -f "$task_output"
@@ -369,6 +436,11 @@ _Checked at $(date '+%Y-%m-%d %H:%M:%S')_" 2>/dev/null || true
     fi
 
     log "Working directory: $work_dir"
+
+    # Clear session if switching to a different project (ensures isolation)
+    if ! can_continue_session "$work_dir"; then
+        clear_session_project
+    fi
 
     # Pull latest if it's a git repo
     if [ -d "$work_dir/.git" ]; then
