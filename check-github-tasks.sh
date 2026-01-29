@@ -22,13 +22,20 @@ get_project_from_labels() {
     echo "$labels" | tr ',' '\n' | grep "^project:" | sed 's/^project://' | head -1
 }
 
-# Get the working directory for a task
+# Get the working directory for a task (creates if needed for new projects)
 get_task_directory() {
     local project="$1"
+    local title="$2"
+    local create_if_missing="${3:-false}"
 
     if [ -n "$project" ]; then
         local project_path="${PROJECTS_DIR:-$HOME/Projects}/$project"
         if [ -d "$project_path" ]; then
+            echo "$project_path"
+            return 0
+        elif [ "$create_if_missing" = "true" ]; then
+            log "Creating new project directory: $project_path"
+            mkdir -p "$project_path"
             echo "$project_path"
             return 0
         else
@@ -39,6 +46,21 @@ get_task_directory() {
         echo "$DEV_PROJECT_DIR"
         return 0
     else
+        # Try to infer project name from title (e.g., "shelfmark.app" -> shelfmark.app)
+        # Look for patterns like "word.word" or "word-word" that look like project names
+        local inferred_project=$(echo "$title" | grep -oE '[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]+' | head -1)
+        if [ -z "$inferred_project" ]; then
+            inferred_project=$(echo "$title" | grep -oE '[a-zA-Z0-9][-a-zA-Z0-9]{2,}' | head -1)
+        fi
+
+        if [ -n "$inferred_project" ] && [ "$create_if_missing" = "true" ]; then
+            local project_path="${PROJECTS_DIR:-$HOME/Projects}/$inferred_project"
+            log "Creating inferred project directory: $project_path"
+            mkdir -p "$project_path"
+            echo "$project_path"
+            return 0
+        fi
+
         echo "${PROJECTS_DIR:-$HOME/Projects}"
         return 0
     fi
@@ -97,6 +119,33 @@ process_github_dev_command() {
     esac
 }
 
+# Check if there are uncompleted tasks in TASKS.md
+has_uncompleted_tasks() {
+    local work_dir="$1"
+    local tasks_file="$work_dir/TASKS.md"
+
+    if [[ -f "$tasks_file" ]]; then
+        local unchecked=$(grep -c '^\s*- \[ \]' "$tasks_file" 2>/dev/null || echo "0")
+        [[ "$unchecked" -gt 0 ]]
+    else
+        return 1
+    fi
+}
+
+# Get task progress summary
+get_task_progress() {
+    local work_dir="$1"
+    local tasks_file="$work_dir/TASKS.md"
+
+    if [[ -f "$tasks_file" ]]; then
+        local total=$(grep -c '^\s*- \[' "$tasks_file" 2>/dev/null || echo "0")
+        local completed=$(grep -c '^\s*- \[x\]' "$tasks_file" 2>/dev/null || echo "0")
+        echo "$completed/$total tasks completed"
+    else
+        echo "no tasks file"
+    fi
+}
+
 # Process a single issue
 process_issue() {
     local issue_number="$1"
@@ -114,13 +163,14 @@ process_issue() {
     gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
         --body "🤖 **Pauly is working on this...**" 2>/dev/null
 
-    # Get project from labels
+    # Get project from labels or infer from title
     local project=$(get_project_from_labels "$labels")
-    local work_dir=$(get_task_directory "$project")
+    # Allow creating directory for new projects
+    local work_dir=$(get_task_directory "$project" "$title" "true")
 
     if [ $? -ne 0 ]; then
         gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
-            --body "❌ **Error:** Could not find project directory for: $project" 2>/dev/null
+            --body "❌ **Error:** Could not determine project directory for: $project" 2>/dev/null
         gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
             --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
         return 1
@@ -155,9 +205,9 @@ process_issue() {
         log "Starting Claude for task: $title"
         echo "------- Claude Output -------"
 
-        # Run Claude and capture output while streaming to console
+        # Run Claude to plan/initialize the task
         local temp_output=$(mktemp)
-        claude --dangerously-skip-permissions -p "You received a task via GitHub issue. Execute it and provide a summary of what you did.
+        claude --dangerously-skip-permissions -p "You received a task via GitHub issue.
 
 Title: $title
 
@@ -166,21 +216,81 @@ $body
 
 Working directory: $work_dir
 
-Execute this task and provide a clear summary of the results." 2>&1 | tee "$temp_output"
+IMPORTANT: If this is a substantial project or feature:
+1. Create a TASKS.md file with a checklist of tasks to complete
+2. Create a CONTEXT.md file with project overview and commands
+3. Do NOT mark the task as done - just set up the plan
+
+If this is a simple task you can complete immediately:
+1. Execute it fully
+2. Verify it works
+3. Provide a summary
+
+Respond with what you did." 2>&1 | tee "$temp_output"
 
         result=$(cat "$temp_output")
         rm -f "$temp_output"
 
         echo "------- End Claude Output -------"
+
+        # Check if Claude created a TASKS.md with uncompleted tasks
+        if has_uncompleted_tasks "$work_dir"; then
+            log "TASKS.md found with uncompleted tasks - running dev loop"
+
+            # Post progress update
+            local progress=$(get_task_progress "$work_dir")
+            gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
+                --body "📋 **Plan created** ($progress)
+
+Starting implementation loop..." 2>/dev/null
+
+            # Run the dev loop until all tasks complete
+            echo "------- Dev Loop Output -------"
+            local loop_output_file=$(mktemp)
+
+            # Source dev.sh and run the loop
+            source "$SCRIPT_DIR/lib/dev.sh"
+            dev_loop 50 2>&1 | tee "$loop_output_file"
+
+            local loop_result=$(cat "$loop_output_file")
+            rm -f "$loop_output_file"
+            echo "------- End Dev Loop Output -------"
+
+            # Append loop result to overall result
+            result="$result
+
+--- Dev Loop ---
+$loop_result"
+
+            # Check if all tasks are now complete
+            if has_uncompleted_tasks "$work_dir"; then
+                local final_progress=$(get_task_progress "$work_dir")
+                log "Dev loop finished but tasks remain: $final_progress"
+
+                # Post partial progress and keep issue open
+                gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
+                    --body "⏸️ **Progress update** ($final_progress)
+
+Some tasks remain. Will continue on next run.
+
+\`\`\`
+$(tail -50 <<< "$loop_result")
+\`\`\`" 2>/dev/null
+
+                # Keep in-progress label, don't close
+                log "Issue #$issue_number still in progress"
+                return 0
+            fi
+        fi
     fi
 
     log "Task completed (${#result} chars of output)"
 
     # Post results as comment
-    local result_comment="## Results
+    local result_comment="## ✅ Completed
 
 \`\`\`
-$result
+$(tail -100 <<< "$result")
 \`\`\`
 
 ---
