@@ -128,6 +128,12 @@ process_issue() {
 
     log "Working directory: $work_dir"
 
+    # Pull latest if it's a git repo
+    if [ -d "$work_dir/.git" ]; then
+        log "Pulling latest changes..."
+        (cd "$work_dir" && git pull --ff-only 2>/dev/null) || log "Warning: git pull failed (may have local changes)"
+    fi
+
     # Determine task type from title
     local title_lower=$(echo "$title" | tr '[:upper:]' '[:lower:]')
     local result=""
