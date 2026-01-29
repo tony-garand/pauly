@@ -9,6 +9,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 # GitHub settings from config
 GITHUB_TASKS_REPO="${GITHUB_TASKS_REPO:-}"
 GITHUB_TASKS_LABEL="${GITHUB_TASKS_LABEL:-pauly}"
+GITHUB_IN_PROGRESS_LABEL="in-progress"
 
 # Check if GitHub tasks are configured
 github_tasks_configured() {
@@ -105,6 +106,10 @@ process_issue() {
 
     log "Processing issue #$issue_number: $title"
 
+    # Mark as in-progress to prevent duplicate processing
+    gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
+        --add-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
+
     # Comment that we're working on it
     gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
         --body "🤖 **Pauly is working on this...**" 2>/dev/null
@@ -116,6 +121,8 @@ process_issue() {
     if [ $? -ne 0 ]; then
         gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
             --body "❌ **Error:** Could not find project directory for: $project" 2>/dev/null
+        gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
+            --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
         return 1
     fi
 
@@ -176,7 +183,9 @@ $result
     gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
         --body "$result_comment" 2>/dev/null
 
-    # Close the issue
+    # Remove in-progress label and close the issue
+    gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
+        --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
     gh issue close "$issue_number" -R "$GITHUB_TASKS_REPO" 2>/dev/null
 
     log "Issue #$issue_number completed and closed"
@@ -199,12 +208,13 @@ main() {
 
     ensure_claude || return 1
 
-    # Fetch open issues with the pauly label
+    # Fetch open issues with the pauly label (excluding in-progress)
     local issues=$(gh issue list -R "$GITHUB_TASKS_REPO" \
         --label "$GITHUB_TASKS_LABEL" \
         --state open \
         --json number,title,body,labels \
-        --limit 10 2>/dev/null)
+        --limit 10 2>/dev/null | \
+        jq -c "[.[] | select(.labels | map(.name) | index(\"$GITHUB_IN_PROGRESS_LABEL\") | not)]")
 
     if [ -z "$issues" ] || [ "$issues" = "[]" ]; then
         log "No pending tasks found."
