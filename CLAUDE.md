@@ -33,6 +33,9 @@ Pauly can build entire projects from idea files using a PLAN -> EXECUTE -> REVIE
 │   ├── config.sh             # Configuration management
 │   ├── dev.sh                # Autonomous development system
 │   └── autofix.sh            # Auto-fix module
+├── admin/                    # Web admin dashboard
+│   ├── client/               # React frontend (Vite + shadcn/ui)
+│   └── server/               # Express backend
 ├── logs/                     # Log files
 │   ├── github-tasks.log      # GitHub task processing logs
 │   ├── cron.log              # Cron job logs
@@ -71,6 +74,38 @@ pauly tail tasks          # Follow task logs live
 pauly config              # Interactive configuration
 pauly config show         # Show current config
 ```
+
+## Admin Dashboard
+
+Pauly includes a web-based admin dashboard for monitoring and management:
+
+```bash
+pauly admin start         # Start the dashboard server
+pauly admin stop          # Stop the dashboard server
+pauly admin status        # Check if dashboard is running
+pauly admin restart       # Restart the dashboard
+pauly admin logs          # View server logs
+```
+
+### Dashboard Features
+- **Status**: View scheduled job states and Pauly configuration
+- **Projects**: Browse projects with git status and task progress
+- **CLIs**: Check installed/missing CLI tools
+- **Logs**: View and tail log files with auto-refresh
+
+### Configuration
+Add to `~/.config/pauly/config`:
+- `ADMIN_PORT` - Server port (default: 3001)
+- `ADMIN_ALLOWED_IP` - Comma-separated IPs allowed to access (localhost always allowed)
+
+Example:
+```bash
+ADMIN_PORT=3001
+ADMIN_ALLOWED_IP=192.168.1.100,192.168.1.101
+```
+
+### Access
+Once started, access the dashboard at `http://localhost:3001` (or your configured port).
 
 ## Session Management
 
