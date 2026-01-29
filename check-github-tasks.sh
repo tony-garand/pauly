@@ -22,24 +22,48 @@ get_project_from_labels() {
     echo "$labels" | tr ',' '\n' | grep "^project:" | sed 's/^project://' | head -1
 }
 
+# Find existing directory with case-insensitive matching
+find_project_dir_case_insensitive() {
+    local base_dir="$1"
+    local name="$2"
+
+    # First try exact match
+    if [ -d "$base_dir/$name" ]; then
+        echo "$base_dir/$name"
+        return 0
+    fi
+
+    # Try case-insensitive match using find
+    local found=$(find "$base_dir" -maxdepth 1 -type d -iname "$name" 2>/dev/null | head -1)
+    if [ -n "$found" ] && [ -d "$found" ]; then
+        echo "$found"
+        return 0
+    fi
+
+    return 1
+}
+
 # Get the working directory for a task (creates if needed for new projects)
 get_task_directory() {
     local project="$1"
     local title="$2"
     local create_if_missing="${3:-false}"
+    local projects_base="${PROJECTS_DIR:-$HOME/Projects}"
 
     if [ -n "$project" ]; then
-        local project_path="${PROJECTS_DIR:-$HOME/Projects}/$project"
-        if [ -d "$project_path" ]; then
-            echo "$project_path"
+        # Try case-insensitive match first
+        local found_path=$(find_project_dir_case_insensitive "$projects_base" "$project")
+        if [ -n "$found_path" ]; then
+            echo "$found_path"
             return 0
         elif [ "$create_if_missing" = "true" ]; then
-            log "Creating new project directory: $project_path"
+            local project_path="$projects_base/$project"
+            echo "Creating new project directory: $project_path" >&2
             mkdir -p "$project_path"
             echo "$project_path"
             return 0
         else
-            log_error "Project directory not found: $project_path"
+            echo "Project directory not found: $projects_base/$project" >&2
             return 1
         fi
     elif [ -n "$DEV_PROJECT_DIR" ] && [ -d "$DEV_PROJECT_DIR" ]; then
@@ -53,15 +77,23 @@ get_task_directory() {
             inferred_project=$(echo "$title" | grep -oE '[a-zA-Z0-9][-a-zA-Z0-9]{2,}' | head -1)
         fi
 
-        if [ -n "$inferred_project" ] && [ "$create_if_missing" = "true" ]; then
-            local project_path="${PROJECTS_DIR:-$HOME/Projects}/$inferred_project"
-            log "Creating inferred project directory: $project_path"
-            mkdir -p "$project_path"
-            echo "$project_path"
-            return 0
+        if [ -n "$inferred_project" ]; then
+            # Try case-insensitive match for inferred project
+            local found_path=$(find_project_dir_case_insensitive "$projects_base" "$inferred_project")
+            if [ -n "$found_path" ]; then
+                echo "Found existing project directory: $found_path" >&2
+                echo "$found_path"
+                return 0
+            elif [ "$create_if_missing" = "true" ]; then
+                local project_path="$projects_base/$inferred_project"
+                echo "Creating inferred project directory: $project_path" >&2
+                mkdir -p "$project_path"
+                echo "$project_path"
+                return 0
+            fi
         fi
 
-        echo "${PROJECTS_DIR:-$HOME/Projects}"
+        echo "$projects_base"
         return 0
     fi
 }
