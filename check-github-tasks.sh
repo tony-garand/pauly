@@ -189,11 +189,62 @@ get_task_progress() {
     fi
 }
 
+# Get lock directory path for an issue
+get_issue_lock_path() {
+    echo "$SCRIPT_DIR/logs/issue-locks/issue-$1"
+}
+
+# Try to acquire lock for an issue (atomic - mkdir fails if exists)
+acquire_issue_lock() {
+    local issue_number="$1"
+    local lock_path=$(get_issue_lock_path "$issue_number")
+
+    # Ensure parent directory exists
+    mkdir -p "$(dirname "$lock_path")"
+
+    # Try to create lock directory (atomic operation)
+    if mkdir "$lock_path" 2>/dev/null; then
+        # Write start time for tracking
+        date +%s > "$lock_path/started"
+        log "Acquired lock for issue #$issue_number"
+        return 0
+    fi
+    return 1
+}
+
+# Release lock for an issue
+release_issue_lock() {
+    local issue_number="$1"
+    local lock_path=$(get_issue_lock_path "$issue_number")
+
+    if [ -d "$lock_path" ]; then
+        rm -rf "$lock_path"
+        log "Released lock for issue #$issue_number"
+    fi
+}
+
+# Get how long an issue has been locked (in seconds)
+get_issue_lock_age() {
+    local issue_number="$1"
+    local lock_path=$(get_issue_lock_path "$issue_number")
+    local started_file="$lock_path/started"
+
+    if [ -f "$started_file" ]; then
+        local start_time=$(cat "$started_file")
+        local now=$(date +%s)
+        echo $((now - start_time))
+    else
+        echo "0"
+    fi
+}
+
 # Run tasks one by one from TASKS.md
+# Uses --continue flag to maintain session context between tasks for efficiency
 run_tasks_from_file() {
     local work_dir="$1"
     local max_tasks="${2:-50}"
     local tasks_done=0
+    local first_task=true
 
     cd "$work_dir" || return 1
 
@@ -214,23 +265,62 @@ run_tasks_from_file() {
 
         # Run Claude with the specific task
         local task_output=$(mktemp)
-        claude --dangerously-skip-permissions -p "You are working on a specific task from a project.
 
+        if [[ "$first_task" == "true" ]]; then
+            # First task: read context, establish session
+            claude --dangerously-skip-permissions -p "You are working on a project with multiple tasks.
+
+Read CONTEXT.md and TASKS.md to understand this project's:
+- Purpose and architecture
+- Tech stack and patterns
+- Build/test commands
+
+Then implement this first task:
 TASK: $task
 
-Working directory: $work_dir
-
 Instructions:
-1. Read CONTEXT.md for project info and commands (if it exists)
-2. Implement this specific task
-3. Test that it works (run tests, compile, etc.)
-4. When COMPLETE: Edit TASKS.md to change this task from '- [ ]' to '- [x]'
-5. Commit your changes with message: \"feat: $task\"
+1. Implement this specific task
+2. Test that it works (run tests, compile, etc.)
+3. When COMPLETE: Edit TASKS.md to change this task from '- [ ]' to '- [x]'
+4. Commit your changes with message: \"feat: $task\"
 
 IMPORTANT:
 - Only work on THIS task, not other tasks
 - Mark the task done in TASKS.md when complete
 - If you can't complete it, explain why and leave it unchecked" 2>&1 | tee "$task_output"
+            first_task=false
+        else
+            # Subsequent tasks: continue session (context preserved)
+            # Fall back to fresh session if --continue fails
+            if ! claude --dangerously-skip-permissions --continue -p "Next task: $task
+
+Implement this task, test it works, mark it done in TASKS.md, and commit.
+Remember: only work on THIS task." 2>&1 | tee "$task_output"; then
+                echo "Session continue failed, starting fresh session with full context..."
+                claude --dangerously-skip-permissions -p "You are resuming work on a project after a session interruption.
+
+Read CONTEXT.md and TASKS.md to understand this project's:
+- Purpose and architecture
+- Tech stack and patterns
+- Build/test commands
+
+Tasks completed so far: $tasks_done
+
+Now implement this task:
+TASK: $task
+
+Instructions:
+1. Implement this specific task
+2. Test that it works (run tests, compile, etc.)
+3. When COMPLETE: Edit TASKS.md to change this task from '- [ ]' to '- [x]'
+4. Commit your changes with message: \"feat: $task\"
+
+IMPORTANT:
+- Only work on THIS task, not other tasks
+- Mark the task done in TASKS.md when complete
+- If you can't complete it, explain why and leave it unchecked" 2>&1 | tee "$task_output"
+            fi
+        fi
 
         local output=$(cat "$task_output")
         rm -f "$task_output"
@@ -263,11 +353,29 @@ process_issue() {
     local body="$3"
     local labels="$4"
 
+    # Try to acquire lock (atomic - prevents race conditions)
+    if ! acquire_issue_lock "$issue_number"; then
+        local age=$(get_issue_lock_age "$issue_number")
+        local age_mins=$((age / 60))
+
+        log "Issue #$issue_number is locked (${age_mins}m) - skipping"
+
+        # Post status comment
+        gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
+            --body "🔄 **Still working...** (${age_mins} minutes elapsed)
+
+_Checked at $(date '+%Y-%m-%d %H:%M:%S')_" 2>/dev/null || true
+
+        return 0
+    fi
+
     log "Processing issue #$issue_number: $title"
 
     # Mark as in-progress to prevent duplicate processing
-    gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
-        --add-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
+    if ! gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
+        --add-label "$GITHUB_IN_PROGRESS_LABEL" 2>&1; then
+        log "Warning: Failed to add in-progress label to issue #$issue_number"
+    fi
 
     # Comment that we're working on it
     gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
@@ -283,6 +391,7 @@ process_issue() {
             --body "❌ **Error:** Could not determine project directory for: $project" 2>/dev/null
         gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
             --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
+        release_issue_lock "$issue_number"
         return 1
     fi
 
@@ -386,6 +495,8 @@ $(tail -50 <<< "$loop_result")
 \`\`\`" 2>/dev/null
 
                 # Keep in-progress label, don't close
+                # Release lock so next run can continue if label is removed
+                release_issue_lock "$issue_number"
                 log "Issue #$issue_number still in progress"
                 return 0
             fi
@@ -412,11 +523,37 @@ $(tail -100 <<< "$result")
         --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
     gh issue close "$issue_number" -R "$GITHUB_TASKS_REPO" 2>/dev/null
 
+    # Release lock AFTER closing issue (at very end of function)
+    release_issue_lock "$issue_number"
+
     log "Issue #$issue_number completed and closed"
 }
 
 main() {
     log "Checking for GitHub tasks..."
+
+    # Clean up stale locks (older than 1 hour = probably crashed)
+    local stale_threshold=3600
+    local now=$(date +%s)
+    local lock_base_dir="$SCRIPT_DIR/logs/issue-locks"
+
+    if [ -d "$lock_base_dir" ]; then
+        for lock_path in "$lock_base_dir"/issue-*; do
+            [ -d "$lock_path" ] || continue
+
+            local started_file="$lock_path/started"
+            if [ -f "$started_file" ]; then
+                local start_time=$(cat "$started_file")
+                local age=$((now - start_time))
+
+                if [ $age -gt $stale_threshold ]; then
+                    local issue_num=$(basename "$lock_path" | sed 's/issue-//')
+                    log "Cleaning up stale lock for issue #$issue_num (${age}s old)"
+                    rm -rf "$lock_path"
+                fi
+            fi
+        done
+    fi
 
     # Check if configured
     if ! github_tasks_configured; then
