@@ -72,6 +72,15 @@ pauly config              # Interactive configuration
 pauly config show         # Show current config
 ```
 
+## Session Management
+
+Tasks use project-scoped session continuity for efficiency:
+- **Same project**: Uses `--continue` flag to maintain context between tasks
+- **Different project**: Starts fresh session to prevent cross-project contamination
+- Session state tracked in `logs/.current-project-session`
+
+This allows efficient multi-tasking within a project while ensuring isolation between projects.
+
 ## Tech Stack
 - Bash scripts
 - Claude CLI (`claude`) for AI tasks
