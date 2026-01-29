@@ -157,7 +157,9 @@ has_uncompleted_tasks() {
     local tasks_file="$work_dir/TASKS.md"
 
     if [[ -f "$tasks_file" ]]; then
-        local unchecked=$(grep -c '^\s*- \[ \]' "$tasks_file" 2>/dev/null || echo "0")
+        local unchecked=$(grep -c '^\s*- \[ \]' "$tasks_file" 2>/dev/null | head -1 || echo "0")
+        unchecked="${unchecked//[^0-9]/}"  # Strip non-numeric chars
+        unchecked="${unchecked:-0}"
         [[ "$unchecked" -gt 0 ]]
     else
         return 1
@@ -181,9 +183,11 @@ get_task_progress() {
     local tasks_file="$work_dir/TASKS.md"
 
     if [[ -f "$tasks_file" ]]; then
-        local total=$(grep -c '^\s*- \[' "$tasks_file" 2>/dev/null || echo "0")
-        local completed=$(grep -c '^\s*- \[x\]' "$tasks_file" 2>/dev/null || echo "0")
-        echo "$completed/$total tasks completed"
+        local total=$(grep -c '^\s*- \[' "$tasks_file" 2>/dev/null | head -1 || echo "0")
+        local completed=$(grep -c '^\s*- \[x\]' "$tasks_file" 2>/dev/null | head -1 || echo "0")
+        total="${total//[^0-9]/}"
+        completed="${completed//[^0-9]/}"
+        echo "${completed:-0}/${total:-0} tasks completed"
     else
         echo "no tasks file"
     fi
@@ -239,12 +243,11 @@ get_issue_lock_age() {
 }
 
 # Run tasks one by one from TASKS.md
-# Uses --continue flag to maintain session context between tasks for efficiency
+# Each task runs in a fresh session to avoid cross-issue context contamination
 run_tasks_from_file() {
     local work_dir="$1"
     local max_tasks="${2:-50}"
     local tasks_done=0
-    local first_task=true
 
     cd "$work_dir" || return 1
 
@@ -263,19 +266,19 @@ run_tasks_from_file() {
         echo "=== Task $tasks_done: $task ==="
         echo "Progress: $progress"
 
-        # Run Claude with the specific task
+        # Run Claude with the specific task (fresh session each time)
         local task_output=$(mktemp)
 
-        if [[ "$first_task" == "true" ]]; then
-            # First task: read context, establish session
-            claude --dangerously-skip-permissions -p "You are working on a project with multiple tasks.
+        claude --dangerously-skip-permissions -p "You are working on a project with multiple tasks.
 
 Read CONTEXT.md and TASKS.md to understand this project's:
 - Purpose and architecture
 - Tech stack and patterns
 - Build/test commands
 
-Then implement this first task:
+Current progress: $progress
+
+Implement this task:
 TASK: $task
 
 Instructions:
@@ -288,39 +291,6 @@ IMPORTANT:
 - Only work on THIS task, not other tasks
 - Mark the task done in TASKS.md when complete
 - If you can't complete it, explain why and leave it unchecked" 2>&1 | tee "$task_output"
-            first_task=false
-        else
-            # Subsequent tasks: continue session (context preserved)
-            # Fall back to fresh session if --continue fails
-            if ! claude --dangerously-skip-permissions --continue -p "Next task: $task
-
-Implement this task, test it works, mark it done in TASKS.md, and commit.
-Remember: only work on THIS task." 2>&1 | tee "$task_output"; then
-                echo "Session continue failed, starting fresh session with full context..."
-                claude --dangerously-skip-permissions -p "You are resuming work on a project after a session interruption.
-
-Read CONTEXT.md and TASKS.md to understand this project's:
-- Purpose and architecture
-- Tech stack and patterns
-- Build/test commands
-
-Tasks completed so far: $tasks_done
-
-Now implement this task:
-TASK: $task
-
-Instructions:
-1. Implement this specific task
-2. Test that it works (run tests, compile, etc.)
-3. When COMPLETE: Edit TASKS.md to change this task from '- [ ]' to '- [x]'
-4. Commit your changes with message: \"feat: $task\"
-
-IMPORTANT:
-- Only work on THIS task, not other tasks
-- Mark the task done in TASKS.md when complete
-- If you can't complete it, explain why and leave it unchecked" 2>&1 | tee "$task_output"
-            fi
-        fi
 
         local output=$(cat "$task_output")
         rm -f "$task_output"
@@ -333,8 +303,11 @@ IMPORTANT:
             git push 2>/dev/null || git push -u origin "$(git branch --show-current)" 2>/dev/null || true
         fi
 
-        # Check if task was marked complete
-        local still_unchecked=$(grep -c "^\s*- \[ \] $(echo "$task" | head -c 30)" "$work_dir/TASKS.md" 2>/dev/null || echo "0")
+        # Check if task was marked complete (escape special chars and get clean number)
+        local task_pattern=$(echo "$task" | head -c 30 | sed 's/[[\.*^$()+?{|]/\\&/g')
+        local still_unchecked=$(grep -c "^\s*- \[ \] $task_pattern" "$work_dir/TASKS.md" 2>/dev/null | head -1 || echo "0")
+        still_unchecked="${still_unchecked//[^0-9]/}"  # Strip non-numeric chars
+        still_unchecked="${still_unchecked:-0}"
         if [[ "$still_unchecked" -gt 0 ]]; then
             echo "WARNING: Task not marked complete, may be stuck"
             # Try one more time to mark it
