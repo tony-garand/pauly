@@ -164,6 +164,17 @@ has_uncompleted_tasks() {
     fi
 }
 
+# Get the first uncompleted task from TASKS.md
+get_next_task() {
+    local work_dir="$1"
+    local tasks_file="$work_dir/TASKS.md"
+
+    if [[ -f "$tasks_file" ]]; then
+        # Get first unchecked task, strip the "- [ ] " prefix
+        grep -m1 '^\s*- \[ \]' "$tasks_file" 2>/dev/null | sed 's/^\s*- \[ \] //'
+    fi
+}
+
 # Get task progress summary
 get_task_progress() {
     local work_dir="$1"
@@ -176,6 +187,73 @@ get_task_progress() {
     else
         echo "no tasks file"
     fi
+}
+
+# Run tasks one by one from TASKS.md
+run_tasks_from_file() {
+    local work_dir="$1"
+    local max_tasks="${2:-50}"
+    local tasks_done=0
+
+    cd "$work_dir" || return 1
+
+    while [[ $tasks_done -lt $max_tasks ]]; do
+        # Get next uncompleted task
+        local task=$(get_next_task "$work_dir")
+
+        if [[ -z "$task" ]]; then
+            echo "All tasks completed!"
+            return 0
+        fi
+
+        ((tasks_done++))
+        local progress=$(get_task_progress "$work_dir")
+        echo ""
+        echo "=== Task $tasks_done: $task ==="
+        echo "Progress: $progress"
+
+        # Run Claude with the specific task
+        local task_output=$(mktemp)
+        claude --dangerously-skip-permissions -p "You are working on a specific task from a project.
+
+TASK: $task
+
+Working directory: $work_dir
+
+Instructions:
+1. Read CONTEXT.md for project info and commands (if it exists)
+2. Implement this specific task
+3. Test that it works (run tests, compile, etc.)
+4. When COMPLETE: Edit TASKS.md to change this task from '- [ ]' to '- [x]'
+5. Commit your changes with message: \"feat: $task\"
+
+IMPORTANT:
+- Only work on THIS task, not other tasks
+- Mark the task done in TASKS.md when complete
+- If you can't complete it, explain why and leave it unchecked" 2>&1 | tee "$task_output"
+
+        local output=$(cat "$task_output")
+        rm -f "$task_output"
+
+        # Commit any uncommitted changes
+        if [[ -d .git ]] && [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+            echo "Committing changes..."
+            git add -A
+            git commit -m "feat: $task" 2>/dev/null || true
+            git push 2>/dev/null || git push -u origin "$(git branch --show-current)" 2>/dev/null || true
+        fi
+
+        # Check if task was marked complete
+        local still_unchecked=$(grep -c "^\s*- \[ \] $(echo "$task" | head -c 30)" "$work_dir/TASKS.md" 2>/dev/null || echo "0")
+        if [[ "$still_unchecked" -gt 0 ]]; then
+            echo "WARNING: Task not marked complete, may be stuck"
+            # Try one more time to mark it
+            sleep 2
+        fi
+    done
+
+    echo "Reached max tasks limit ($max_tasks)"
+    return 1
 }
 
 # Process a single issue
@@ -267,37 +345,35 @@ Respond with what you did." 2>&1 | tee "$temp_output"
 
         # Check if Claude created a TASKS.md with uncompleted tasks
         if has_uncompleted_tasks "$work_dir"; then
-            log "TASKS.md found with uncompleted tasks - running dev loop"
+            log "TASKS.md found with uncompleted tasks - running task loop"
 
             # Post progress update
             local progress=$(get_task_progress "$work_dir")
             gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
                 --body "📋 **Plan created** ($progress)
 
-Starting implementation loop..." 2>/dev/null
+Starting implementation..." 2>/dev/null
 
-            # Run the dev loop until all tasks complete
-            echo "------- Dev Loop Output -------"
+            # Run tasks one by one
+            echo "------- Task Loop Output -------"
             local loop_output_file=$(mktemp)
 
-            # Source dev.sh and run the loop
-            source "$SCRIPT_DIR/lib/dev.sh"
-            dev_loop 50 2>&1 | tee "$loop_output_file"
+            run_tasks_from_file "$work_dir" 50 2>&1 | tee "$loop_output_file"
 
             local loop_result=$(cat "$loop_output_file")
             rm -f "$loop_output_file"
-            echo "------- End Dev Loop Output -------"
+            echo "------- End Task Loop Output -------"
 
             # Append loop result to overall result
             result="$result
 
---- Dev Loop ---
+--- Task Loop ---
 $loop_result"
 
             # Check if all tasks are now complete
             if has_uncompleted_tasks "$work_dir"; then
                 local final_progress=$(get_task_progress "$work_dir")
-                log "Dev loop finished but tasks remain: $final_progress"
+                log "Task loop finished but tasks remain: $final_progress"
 
                 # Post partial progress and keep issue open
                 gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
