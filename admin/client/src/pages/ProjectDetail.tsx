@@ -51,9 +51,11 @@ import {
   linkProjectToRailway,
   deployToRailway,
   fetchRailwayStatus,
+  fetchRailwayProjects,
   type ProjectDetail as ProjectDetailType,
   type DevJobStatus,
   type RailwayStatus,
+  type RailwayProject,
 } from "@/lib/api";
 
 export function ProjectDetail() {
@@ -72,6 +74,10 @@ export function ProjectDetail() {
   const [devStatus, setDevStatus] = useState<DevJobStatus | null>(null);
   const [showDevLog, setShowDevLog] = useState(false);
   const [railwayStatus, setRailwayStatus] = useState<RailwayStatus | null>(null);
+  const [railwayProjects, setRailwayProjects] = useState<RailwayProject[]>([]);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [selectedRailwayProject, setSelectedRailwayProject] = useState<string>("");
+  const [selectedRailwayService, setSelectedRailwayService] = useState<string>("");
   const [linkingToRailway, setLinkingToRailway] = useState(false);
   const [deployingToRailway, setDeployingToRailway] = useState(false);
 
@@ -93,11 +99,14 @@ export function ProjectDetail() {
     loadData();
   }, [loadData]);
 
-  // Load Railway status
+  // Load Railway status and projects
   useEffect(() => {
     fetchRailwayStatus()
       .then(setRailwayStatus)
       .catch(() => setRailwayStatus(null));
+    fetchRailwayProjects()
+      .then((res) => setRailwayProjects(res.projects || []))
+      .catch(() => setRailwayProjects([]));
   }, []);
 
   // Poll dev status
@@ -130,14 +139,17 @@ export function ProjectDetail() {
   };
 
   const handleLinkToRailway = async () => {
-    if (!project) return;
+    if (!project || !selectedRailwayProject) return;
     setLinkingToRailway(true);
     setError(null);
     try {
-      await linkProjectToRailway(project.path);
+      await linkProjectToRailway(project.path, selectedRailwayProject, selectedRailwayService || undefined);
       // Refresh Railway status
       const status = await fetchRailwayStatus();
       setRailwayStatus(status);
+      setShowLinkDialog(false);
+      setSelectedRailwayProject("");
+      setSelectedRailwayService("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to link to Railway");
     } finally {
@@ -145,12 +157,15 @@ export function ProjectDetail() {
     }
   };
 
+  // Get services for selected Railway project
+  const selectedProjectServices = railwayProjects.find(p => p.id === selectedRailwayProject)?.services || [];
+
   const handleDeployToRailway = async () => {
     if (!project) return;
     setDeployingToRailway(true);
     setError(null);
     try {
-      await deployToRailway(project.name, true);
+      await deployToRailway(project.path, true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to deploy to Railway");
     } finally {
@@ -405,20 +420,92 @@ export function ProjectDetail() {
               Deploy this project to Railway
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {/* Link Dialog */}
+            {showLinkDialog && (
+              <div className="p-3 bg-muted/50 rounded-lg space-y-3">
+                <p className="text-sm font-medium">Link to Railway Project</p>
+                {railwayProjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No Railway projects found. Create one first with <code className="bg-muted px-1 rounded">railway init</code>
+                  </p>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Project</label>
+                      <select
+                        value={selectedRailwayProject}
+                        onChange={(e) => {
+                          setSelectedRailwayProject(e.target.value);
+                          setSelectedRailwayService("");
+                        }}
+                        className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background"
+                      >
+                        <option value="">Choose a project...</option>
+                        {railwayProjects.map((rp) => (
+                          <option key={rp.id} value={rp.id}>
+                            {rp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {selectedRailwayProject && selectedProjectServices.length > 0 && (
+                      <div>
+                        <label className="text-xs text-muted-foreground">Service (for deploy)</label>
+                        <select
+                          value={selectedRailwayService}
+                          onChange={(e) => setSelectedRailwayService(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background"
+                        >
+                          <option value="">Choose a service...</option>
+                          {selectedProjectServices.map((svc) => (
+                            <option key={svc.id} value={svc.id}>
+                              {svc.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleLinkToRailway}
+                    disabled={linkingToRailway || !selectedRailwayProject}
+                    className="gap-1"
+                  >
+                    {linkingToRailway ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Link2 className="h-3 w-3" />
+                    )}
+                    Link
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowLinkDialog(false);
+                      setSelectedRailwayProject("");
+                      setSelectedRailwayService("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleLinkToRailway}
-                disabled={linkingToRailway}
+                onClick={() => setShowLinkDialog(true)}
+                disabled={linkingToRailway || showLinkDialog}
                 className="gap-1"
               >
-                {linkingToRailway ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Link2 className="h-3 w-3" />
-                )}
+                <Link2 className="h-3 w-3" />
                 Link Project
               </Button>
               <Button

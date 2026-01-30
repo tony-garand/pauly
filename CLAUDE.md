@@ -97,7 +97,8 @@ pauly admin logs          # View server logs
 
 ### Dashboard Features
 - **Status**: View scheduled job states and Pauly configuration
-- **Projects**: Browse projects with git status and task progress
+- **Projects**: Browse projects with git status, task progress, and Railway deployment
+- **Railway**: View Railway auth status and list cloud projects
 - **CLIs**: Check installed/missing CLI tools
 - **Logs**: View and tail log files with auto-refresh
 
@@ -123,7 +124,7 @@ Pauly integrates with [Railway](https://railway.app) for deploying projects to t
 
 ```bash
 pauly railway deploy       # Deploy current directory to Railway
-pauly railway link         # Link to existing Railway project
+pauly railway link         # Link to existing Railway project (interactive)
 pauly railway status       # Check deployment status
 pauly railway logs         # View deployment logs
 pauly railway env          # List environment variables
@@ -146,35 +147,86 @@ Railway deployment skills are available in `~/.pauly/Skills/`:
 
 ### Admin Dashboard Railway Features
 
-The admin dashboard includes a Railway management page at `/railway`:
-- View Railway authentication status
-- List and manage Railway projects
-- Deploy projects directly from the UI
-- View deployment logs
-- Quick actions on project detail pages
+The admin dashboard provides Railway integration through two pages:
+
+#### Railway Overview Page (`/railway`)
+- View Railway authentication status (logged in user)
+- List all Railway projects in your account
+- Quick links to Railway dashboard and documentation
+- **Note**: Deploy/logs must be done from individual project pages
+
+#### Project Detail Page (`/projects/<name>`)
+Each project page has a Railway section with:
+- **Link Project**: Connect local project to a Railway project
+  - Select Railway project from dropdown
+  - Select service (required for projects with multiple services)
+- **Deploy**: Deploy the linked project to Railway
+- **Dashboard**: Quick link to Railway overview page
+
+### How Railway Linking Works
+
+Railway CLI commands are **directory-based** - they need to run from a folder that's been linked to a Railway project. The admin dashboard handles this by:
+
+1. Storing the local project path when you click Deploy/Link
+2. Running Railway CLI commands from that directory
+3. Using the `--project` and `--service` flags for non-interactive linking
 
 ### Getting Started with Railway
 
-1. Install Railway CLI (already installed):
-   ```bash
-   railway --version
-   ```
+#### Via Terminal (Interactive)
+```bash
+# 1. Authenticate
+railway login
 
-2. Authenticate with Railway:
-   ```bash
-   pauly railway login
-   ```
+# 2. Navigate to your project
+cd ~/Projects/my-project
 
-3. Link a project:
-   ```bash
-   cd ~/Projects/my-project
-   pauly railway link
-   ```
+# 3. Link (interactive - lets you choose project/environment/service)
+railway link
 
-4. Deploy:
-   ```bash
-   pauly railway deploy
-   ```
+# 4. Deploy
+railway up
+```
+
+#### Via Admin Dashboard
+1. Authenticate first (terminal): `railway login`
+2. Open dashboard: http://localhost:3001
+3. Go to Projects → Select your project
+4. Click **Link Project**:
+   - Choose a Railway project from the dropdown
+   - Choose a service (if project has multiple services)
+   - Click **Link**
+5. Click **Deploy** to deploy
+
+### Railway API Endpoints
+
+The admin server exposes these Railway endpoints:
+
+```
+GET  /api/railway/status              # Get auth status
+GET  /api/railway/projects            # List Railway projects (includes services)
+POST /api/railway/link                # Link local project to Railway
+     Body: { projectPath, railwayProjectId, serviceId? }
+POST /api/railway/projects/_/deploy   # Deploy project
+     Body: { projectPath, detach? }
+GET  /api/railway/projects/_/logs     # Get deployment logs
+     Query: projectPath, lines?
+```
+
+### Troubleshooting
+
+#### "No linked project found"
+The local directory isn't linked to a Railway project. Either:
+- Run `railway link` in the project directory (terminal)
+- Use the Link Project button in the admin dashboard
+
+#### "Multiple services found"
+Your Railway project has multiple services. You must select which service to deploy to:
+- Terminal: `railway link` and select the service interactively
+- Dashboard: Select the service when linking
+
+#### "Railway project ID is required"
+The admin dashboard requires selecting a Railway project to link. The `railway link` command is interactive in terminal but requires explicit project/service IDs when run programmatically.
 
 ## Session Management
 

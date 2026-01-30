@@ -18,15 +18,13 @@ import {
   RefreshCw,
   ExternalLink,
   LogIn,
-  ScrollText,
-  Loader2,
+  FolderGit2,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   fetchRailwayStatus,
   fetchRailwayProjects,
   fetchRailwayDeployments,
-  deployToRailway,
-  fetchRailwayLogs,
   type RailwayStatus,
   type RailwayProject,
   type RailwayDeployment,
@@ -38,9 +36,6 @@ export function Railway() {
   const [deployments, setDeployments] = useState<RailwayDeployment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deploying, setDeploying] = useState<string | null>(null);
-  const [logs, setLogs] = useState<{ projectId: string; content: string } | null>(null);
-  const [loadingLogs, setLoadingLogs] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -64,30 +59,6 @@ export function Railway() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleDeploy = async (projectId: string) => {
-    setDeploying(projectId);
-    try {
-      await deployToRailway(projectId, true);
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Deployment failed");
-    } finally {
-      setDeploying(null);
-    }
-  };
-
-  const handleViewLogs = async (projectId: string) => {
-    setLoadingLogs(projectId);
-    try {
-      const res = await fetchRailwayLogs(projectId, 100);
-      setLogs({ projectId, content: res.logs });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load logs");
-    } finally {
-      setLoadingLogs(null);
-    }
-  };
 
   if (loading) {
     return <Loading message="Loading Railway status..." />;
@@ -193,10 +164,10 @@ export function Railway() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Rocket className="h-5 w-5" />
-              Projects
+              Railway Projects
             </CardTitle>
             <CardDescription>
-              Your Railway projects
+              Your Railway projects. To deploy, go to a local project's page.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -229,65 +200,22 @@ export function Railway() {
                           {project.environments.length} env
                         </Badge>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewLogs(project.id)}
-                        disabled={loadingLogs === project.id}
-                        className="h-7 text-xs gap-1"
-                      >
-                        {loadingLogs === project.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <ScrollText className="h-3 w-3" />
-                        )}
-                        Logs
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleDeploy(project.id)}
-                        disabled={deploying === project.id}
-                        className="h-7 text-xs gap-1"
-                      >
-                        {deploying === project.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Rocket className="h-3 w-3" />
-                        )}
-                        Deploy
-                      </Button>
                     </div>
                   </div>
                 ))}
+                <div className="pt-3 border-t">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    To deploy or view logs, go to a linked local project:
+                  </p>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link to="/projects" className="gap-1">
+                      <FolderGit2 className="h-3 w-3" />
+                      View Projects
+                    </Link>
+                  </Button>
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Logs Viewer */}
-      {logs && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <ScrollText className="h-5 w-5" />
-                Logs: {logs.projectId}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLogs(null)}
-              >
-                Close
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="bg-muted p-4 rounded-md font-mono text-xs overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
-              {logs.content || "No logs available"}
-            </pre>
           </CardContent>
         </Card>
       )}

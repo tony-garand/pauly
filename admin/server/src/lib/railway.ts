@@ -8,10 +8,16 @@ export interface RailwayStatus {
   error?: string;
 }
 
+export interface RailwayService {
+  id: string;
+  name: string;
+}
+
 export interface RailwayProject {
   id: string;
   name: string;
   environments?: string[];
+  services?: RailwayService[];
 }
 
 export interface RailwayDeployment {
@@ -110,7 +116,25 @@ export async function listRailwayProjects(): Promise<RailwayProject[]> {
   try {
     // Railway list outputs JSON when --json flag is used
     const data = JSON.parse(result.stdout);
-    return Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) return [];
+
+    // Parse services from the nested structure
+    return data.map((project: Record<string, unknown>) => {
+      const services: RailwayService[] = [];
+      const servicesData = project.services as { edges?: Array<{ node?: { id?: string; name?: string } }> } | undefined;
+      if (servicesData?.edges) {
+        for (const edge of servicesData.edges) {
+          if (edge.node?.id && edge.node?.name) {
+            services.push({ id: edge.node.id, name: edge.node.name });
+          }
+        }
+      }
+      return {
+        id: project.id as string,
+        name: project.name as string,
+        services,
+      };
+    });
   } catch {
     // Fallback: parse text output
     const lines = result.stdout.split("\n").filter((line) => line.trim());
@@ -130,34 +154,51 @@ export async function getRailwayProjectDetails(projectId: string): Promise<Railw
 }
 
 // POST /api/railway/projects/:id/deploy - Trigger deployment
-export async function deployToRailway(projectId: string, detach?: boolean): Promise<DeployResult> {
+export async function deployToRailway(projectPath: string, detach?: boolean): Promise<DeployResult> {
+  // Check if project is linked first
+  const statusResult = execRailway(["status"], projectPath);
+  if (statusResult.exitCode !== 0) {
+    const errorMsg = statusResult.stderr || statusResult.stdout || "";
+    if (errorMsg.includes("No linked project")) {
+      return {
+        success: false,
+        error: "Project not linked to Railway. Run 'railway link' in the project directory first.",
+      };
+    }
+    return {
+      success: false,
+      error: errorMsg || "Failed to check Railway status",
+    };
+  }
+
   const args = ["up"];
   if (detach) {
     args.push("--detach");
   }
 
-  const result = execRailway(args);
+  const result = execRailway(args, projectPath);
 
   if (result.exitCode !== 0) {
+    const errorMsg = result.stderr || result.stdout || "Deployment failed";
     return {
       success: false,
-      error: result.stderr || "Deployment failed",
+      error: errorMsg,
     };
   }
 
   return {
     success: true,
-    message: "Deployment initiated successfully",
+    message: result.stdout || "Deployment initiated successfully",
   };
 }
 
 // GET /api/railway/projects/:id/logs - Get deployment logs
-export async function getRailwayLogs(projectId: string, lines?: number): Promise<string> {
+export async function getRailwayLogs(projectPath: string, lines?: number): Promise<string> {
   const args = ["logs"];
   // Note: Railway logs doesn't support --lines flag, it streams continuously
   // We'll capture what we can
 
-  const result = execRailway(args);
+  const result = execRailway(args, projectPath);
 
   if (result.exitCode !== 0 && !result.stdout) {
     return result.stderr || "Failed to fetch logs";
@@ -172,18 +213,32 @@ export async function getRailwayLogs(projectId: string, lines?: number): Promise
 }
 
 // POST /api/railway/link - Link local project to Railway
-export async function linkProjectToRailway(projectPath: string, railwayProjectId?: string): Promise<LinkResult> {
-  const args = ["link"];
-  if (railwayProjectId) {
-    args.push(railwayProjectId);
+// Note: railway link is interactive by default. For non-interactive mode,
+// you must provide railwayProjectId and optionally serviceId
+export async function linkProjectToRailway(
+  projectPath: string,
+  railwayProjectId?: string,
+  serviceId?: string
+): Promise<LinkResult> {
+  if (!railwayProjectId) {
+    return {
+      success: false,
+      error: "Railway project ID is required. Run 'railway link' in terminal first, or provide a project ID.",
+    };
+  }
+
+  const args = ["link", "--project", railwayProjectId];
+  if (serviceId) {
+    args.push("--service", serviceId);
   }
 
   const result = execRailway(args, projectPath);
 
   if (result.exitCode !== 0) {
+    const errorMsg = result.stderr || result.stdout || "Failed to link project";
     return {
       success: false,
-      error: result.stderr || "Failed to link project",
+      error: errorMsg,
     };
   }
 

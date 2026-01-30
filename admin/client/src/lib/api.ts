@@ -298,10 +298,16 @@ export interface RailwayStatus {
   error?: string;
 }
 
+export interface RailwayService {
+  id: string;
+  name: string;
+}
+
 export interface RailwayProject {
   id: string;
   name: string;
   environments?: string[];
+  services?: RailwayService[];
 }
 
 export interface RailwayDeployment {
@@ -323,11 +329,11 @@ export async function fetchRailwayProjectDetails(projectId: string) {
   return fetchApi<{ project: RailwayProject }>(`/railway/projects/${encodeURIComponent(projectId)}`);
 }
 
-export async function deployToRailway(projectId: string, detach?: boolean) {
-  const response = await fetch(`${API_BASE}/railway/projects/${encodeURIComponent(projectId)}/deploy`, {
+export async function deployToRailway(projectPath: string, detach?: boolean) {
+  const response = await fetch(`${API_BASE}/railway/projects/_/deploy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ detach }),
+    body: JSON.stringify({ detach, projectPath }),
   });
   if (!response.ok) {
     const data = await response.json();
@@ -336,16 +342,17 @@ export async function deployToRailway(projectId: string, detach?: boolean) {
   return response.json() as Promise<{ success: boolean; message?: string }>;
 }
 
-export async function fetchRailwayLogs(projectId: string, lines?: number) {
-  const params = lines ? `?lines=${lines}` : "";
-  return fetchApi<{ logs: string }>(`/railway/projects/${encodeURIComponent(projectId)}/logs${params}`);
+export async function fetchRailwayLogs(projectPath: string, lines?: number) {
+  const params = new URLSearchParams({ projectPath });
+  if (lines) params.set("lines", lines.toString());
+  return fetchApi<{ logs: string }>(`/railway/projects/_/logs?${params.toString()}`);
 }
 
-export async function linkProjectToRailway(projectPath: string, railwayProjectId?: string) {
+export async function linkProjectToRailway(projectPath: string, railwayProjectId?: string, serviceId?: string) {
   const response = await fetch(`${API_BASE}/railway/link`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectPath, railwayProjectId }),
+    body: JSON.stringify({ projectPath, railwayProjectId, serviceId }),
   });
   if (!response.ok) {
     const data = await response.json();

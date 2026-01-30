@@ -49,12 +49,17 @@ router.get("/projects/:id", async (req, res) => {
 });
 
 // POST /api/railway/projects/:id/deploy - Trigger deployment
+// Requires projectPath in body (the local directory linked to Railway)
 router.post("/projects/:id/deploy", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { detach } = req.body;
+    const { detach, projectPath } = req.body;
 
-    const result = await deployToRailway(id, detach);
+    if (!projectPath) {
+      res.status(400).json({ error: "projectPath is required. Deploy from a project page or provide the local project path." });
+      return;
+    }
+
+    const result = await deployToRailway(projectPath, detach);
 
     if (!result.success) {
       res.status(500).json({ error: result.error || "Deployment failed" });
@@ -68,12 +73,17 @@ router.post("/projects/:id/deploy", async (req, res) => {
 });
 
 // GET /api/railway/projects/:id/logs - Get deployment logs
+// Requires projectPath query param (the local directory linked to Railway)
 router.get("/projects/:id/logs", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { lines } = req.query;
+    const { lines, projectPath } = req.query;
 
-    const logs = await getRailwayLogs(id, lines ? parseInt(lines as string, 10) : undefined);
+    if (!projectPath || typeof projectPath !== "string") {
+      res.status(400).json({ error: "projectPath query param is required" });
+      return;
+    }
+
+    const logs = await getRailwayLogs(projectPath, lines ? parseInt(lines as string, 10) : undefined);
     res.json({ logs });
   } catch (error) {
     res.status(500).json({ error: "Failed to get deployment logs" });
@@ -83,14 +93,14 @@ router.get("/projects/:id/logs", async (req, res) => {
 // POST /api/railway/link - Link local project to Railway
 router.post("/link", async (req, res) => {
   try {
-    const { projectPath, railwayProjectId } = req.body;
+    const { projectPath, railwayProjectId, serviceId } = req.body;
 
     if (!projectPath) {
       res.status(400).json({ error: "Project path is required" });
       return;
     }
 
-    const result = await linkProjectToRailway(projectPath, railwayProjectId);
+    const result = await linkProjectToRailway(projectPath, railwayProjectId, serviceId);
 
     if (!result.success) {
       res.status(500).json({ error: result.error || "Failed to link project" });
