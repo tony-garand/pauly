@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from "express";
-import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo } from "../lib/projects.js";
+import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo, startDevProcess, stopDevProcess, restartDevProcess } from "../lib/projects.js";
 
 const router: RouterType = Router();
 
@@ -151,6 +151,45 @@ router.delete("/:name/dev/log", (req, res) => {
   const { name } = req.params;
   const success = clearDevLog(name);
   res.json({ success });
+});
+
+// Start dev process for a project
+router.post("/:name/dev/start", (req, res) => {
+  const { name } = req.params;
+  const result = startDevProcess(name);
+
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Stop dev process for a project
+router.post("/:name/dev/stop", (req, res) => {
+  const { name } = req.params;
+  const result = stopDevProcess(name);
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Restart dev process for a project
+router.post("/:name/dev/restart", (req, res) => {
+  const { name } = req.params;
+  const result = restartDevProcess(name);
+
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
 });
 
 export default router;

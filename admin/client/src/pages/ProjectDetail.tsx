@@ -37,6 +37,9 @@ import {
   Train,
   Rocket,
   Link2,
+  Play,
+  Square,
+  RotateCcw,
 } from "lucide-react";
 import {
   fetchProjectDetail,
@@ -48,6 +51,9 @@ import {
   getIssueJobStatus,
   getDevJobStatus,
   clearDevLog,
+  startDevProcess,
+  stopDevProcess,
+  restartDevProcess,
   linkProjectToRailway,
   deployToRailway,
   fetchRailwayStatus,
@@ -135,6 +141,39 @@ export function ProjectDetail() {
       setShowDevLog(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to clear log");
+    }
+  };
+
+  const handleStartDev = async () => {
+    if (!name) return;
+    setError(null);
+    try {
+      await startDevProcess(name);
+      await loadDevStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start dev process");
+    }
+  };
+
+  const handleStopDev = async () => {
+    if (!name) return;
+    setError(null);
+    try {
+      await stopDevProcess(name);
+      await loadDevStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to stop dev process");
+    }
+  };
+
+  const handleRestartDev = async () => {
+    if (!name) return;
+    setError(null);
+    try {
+      await restartDevProcess(name);
+      await loadDevStatus();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to restart dev process");
     }
   };
 
@@ -579,16 +618,63 @@ export function ProjectDetail() {
               />
             </div>
           )}
-          {/* Dev status indicator */}
-          {devStatus && devStatus.status !== "idle" && (
-            <div className="mt-3 space-y-2">
-              {/* Running indicator */}
-              {devStatus.status === "running" && !devStatus.error && (
-                <div className="flex items-center gap-2 text-sm text-primary animate-pulse">
+          {/* Dev controls */}
+          <div className="mt-3 flex items-center gap-2">
+            {devStatus?.status === "running" ? (
+              <>
+                <div className="flex items-center gap-2 text-sm text-primary animate-pulse flex-1">
                   <Sparkles className="h-4 w-4" />
                   <span>Claude is working on these tasks...</span>
                 </div>
-              )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleStopDev}
+                  className="h-7 text-xs gap-1"
+                >
+                  <Square className="h-3 w-3" />
+                  Stop
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRestartDev}
+                  className="h-7 text-xs gap-1"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Restart
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleStartDev}
+                  disabled={!project?.tasks || project.tasks.length === 0}
+                  className="h-7 text-xs gap-1"
+                >
+                  <Play className="h-3 w-3" />
+                  Start Dev
+                </Button>
+                {devStatus?.status === "error" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRestartDev}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Retry
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Dev status indicator */}
+          {devStatus && devStatus.status !== "idle" && devStatus.status !== "running" && (
+            <div className="mt-3 space-y-2">
 
               {/* Error display */}
               {devStatus.error && (

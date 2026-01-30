@@ -273,6 +273,39 @@ export async function clearDevLog(projectName: string) {
   return response.json();
 }
 
+export async function startDevProcess(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/dev/start`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function stopDevProcess(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/dev/stop`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function restartDevProcess(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/dev/restart`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
 export interface LogInfo {
   name: string;
   path: string;

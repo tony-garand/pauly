@@ -754,6 +754,89 @@ export function clearDevLog(projectName: string): boolean {
   return true;
 }
 
+export function stopDevProcess(projectName: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+
+  try {
+    // Find and kill the dev process
+    const psOutput = execFileSync("pgrep", ["-f", `pauly dev.*${projectPath}`], {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    }).trim();
+
+    if (psOutput) {
+      const pids = psOutput.split("\n").filter(Boolean);
+      for (const pid of pids) {
+        try {
+          execFileSync("kill", ["-TERM", pid], { stdio: ["pipe", "pipe", "pipe"] });
+        } catch {
+          // Process may have already exited
+        }
+      }
+      return { success: true };
+    }
+    return { success: true }; // No process to stop
+  } catch {
+    // pgrep returns non-zero if no processes found
+    return { success: true };
+  }
+}
+
+export function startDevProcess(projectName: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+
+  // Validate project exists
+  if (!existsSync(projectPath)) {
+    return { success: false, error: "Project not found" };
+  }
+
+  // Check if TASKS.md exists
+  const tasksPath = join(projectPath, "TASKS.md");
+  if (!existsSync(tasksPath)) {
+    return { success: false, error: "No TASKS.md found - add tasks first" };
+  }
+
+  // Stop any existing dev process first
+  stopDevProcess(projectName);
+
+  // Clear previous log
+  const logPath = getDevLogPath(projectName);
+  if (existsSync(logPath)) {
+    rmSync(logPath);
+  }
+
+  // Start pauly dev in background
+  const paulyPath = join(homedir(), ".pauly", "pauly");
+
+  // Ensure PATH includes common CLI locations
+  const envPath = [
+    join(homedir(), ".local", "bin"),
+    "/usr/local/bin",
+    process.env.PATH || ""
+  ].join(":");
+
+  const cmd = `cd "${projectPath}" && "${paulyPath}" dev >> "${logPath}" 2>&1`;
+  spawn("bash", ["-c", cmd], {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, PATH: envPath, TERM: "dumb" }
+  }).unref();
+
+  return { success: true };
+}
+
+export function restartDevProcess(projectName: string): { success: boolean; error?: string } {
+  const stopResult = stopDevProcess(projectName);
+  if (!stopResult.success) {
+    return stopResult;
+  }
+
+  // Small delay to ensure process is stopped
+  return startDevProcess(projectName);
+}
+
 export function createIssue(projectName: string, title: string, body: string): string {
   const projectsDir = getProjectsDir();
   const projectPath = join(projectsDir, projectName);
