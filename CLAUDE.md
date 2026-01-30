@@ -32,7 +32,15 @@ Pauly can build entire projects from idea files using a PLAN -> EXECUTE -> REVIE
 │   ├── common.sh             # Shared functions
 │   ├── config.sh             # Configuration management
 │   ├── dev.sh                # Autonomous development system
-│   └── autofix.sh            # Auto-fix module
+│   ├── autofix.sh            # Auto-fix module
+│   └── railway.sh            # Railway helper functions
+├── Skills/                   # Claude skill files
+│   ├── CLAUDE.md             # Skills documentation
+│   ├── railway-deploy.md     # Deploy to Railway skill
+│   ├── railway-link.md       # Link project skill
+│   ├── railway-logs.md       # View logs skill
+│   ├── railway-env.md        # Manage env vars skill
+│   └── railway-status.md     # Check status skill
 ├── admin/                    # Web admin dashboard
 │   ├── client/               # React frontend (Vite + shadcn/ui)
 │   └── server/               # Express backend
@@ -62,7 +70,7 @@ Create issues in the configured repo with:
 - Body: Details/context
 
 ### Email (Optional)
-Send email with subject starting with `[PAULY]`
+Send any email from an allowed sender (no subject prefix required)
 
 ## Common Commands
 
@@ -107,6 +115,67 @@ ADMIN_ALLOWED_IP=192.168.1.100,192.168.1.101
 ### Access
 Once started, access the dashboard at `http://localhost:3001` (or your configured port).
 
+## Railway Integration
+
+Pauly integrates with [Railway](https://railway.app) for deploying projects to the cloud.
+
+### Railway CLI Commands
+
+```bash
+pauly railway deploy       # Deploy current directory to Railway
+pauly railway link         # Link to existing Railway project
+pauly railway status       # Check deployment status
+pauly railway logs         # View deployment logs
+pauly railway env          # List environment variables
+pauly railway env set K=V  # Set environment variable
+pauly railway env unset K  # Remove environment variable
+pauly railway init         # Initialize new Railway project
+pauly railway open         # Open project in browser
+pauly railway login        # Authenticate with Railway
+pauly railway whoami       # Show current Railway user
+```
+
+### Railway Skills
+
+Railway deployment skills are available in `~/.pauly/Skills/`:
+- `railway-deploy.md` - Deploy project to Railway
+- `railway-link.md` - Link local project to Railway project
+- `railway-logs.md` - View Railway deployment logs
+- `railway-env.md` - Manage environment variables
+- `railway-status.md` - Check deployment status
+
+### Admin Dashboard Railway Features
+
+The admin dashboard includes a Railway management page at `/railway`:
+- View Railway authentication status
+- List and manage Railway projects
+- Deploy projects directly from the UI
+- View deployment logs
+- Quick actions on project detail pages
+
+### Getting Started with Railway
+
+1. Install Railway CLI (already installed):
+   ```bash
+   railway --version
+   ```
+
+2. Authenticate with Railway:
+   ```bash
+   pauly railway login
+   ```
+
+3. Link a project:
+   ```bash
+   cd ~/Projects/my-project
+   pauly railway link
+   ```
+
+4. Deploy:
+   ```bash
+   pauly railway deploy
+   ```
+
 ## Session Management
 
 Tasks use project-scoped session continuity for efficiency:
@@ -120,5 +189,6 @@ This allows efficient multi-tasking within a project while ensuring isolation be
 - Bash scripts
 - Claude CLI (`claude`) for AI tasks
 - GitHub CLI (`gh`) for issue management
+- Railway CLI (`railway`) for cloud deployments
 - msmtp for email notifications
 - cron for scheduling
