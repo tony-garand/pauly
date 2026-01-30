@@ -22,7 +22,6 @@ DEFAULT_SMTP_PASSWORD=""
 DEFAULT_IMAP_HOST="imap.gmail.com"
 DEFAULT_IMAP_PORT=993
 DEFAULT_ALLOWED_SENDERS=""
-DEFAULT_TASK_SUBJECT_PREFIX="[PAULY]"
 
 # Dev mode defaults
 DEFAULT_DEV_PROJECT_DIR=""
@@ -68,7 +67,6 @@ load_config() {
     IMAP_HOST="${DEFAULT_IMAP_HOST}"
     IMAP_PORT="${DEFAULT_IMAP_PORT}"
     ALLOWED_SENDERS="${DEFAULT_ALLOWED_SENDERS}"
-    TASK_SUBJECT_PREFIX="${DEFAULT_TASK_SUBJECT_PREFIX}"
 
     # Dev mode defaults
     DEV_PROJECT_DIR="${DEFAULT_DEV_PROJECT_DIR}"
@@ -119,7 +117,6 @@ SMTP_PASSWORD="$SMTP_PASSWORD"
 IMAP_HOST="$IMAP_HOST"
 IMAP_PORT=$IMAP_PORT
 ALLOWED_SENDERS="$ALLOWED_SENDERS"
-TASK_SUBJECT_PREFIX="$TASK_SUBJECT_PREFIX"
 
 # Dev Mode Configuration
 DEV_PROJECT_DIR="$DEV_PROJECT_DIR"
@@ -274,8 +271,8 @@ run_config_wizard() {
         echo ""
         echo "Email Tasks Configuration"
         echo "-------------------------"
-        echo "Send emails with subject starting with '$TASK_SUBJECT_PREFIX'"
-        echo "to have Pauly execute tasks automatically."
+        echo "Send emails to have Pauly execute tasks automatically."
+        echo "Only emails from allowed senders will be processed."
         echo ""
 
         IMAP_HOST=$(prompt_value "IMAP host" "$IMAP_HOST")
@@ -285,8 +282,6 @@ run_config_wizard() {
         local allowed_default="${ALLOWED_SENDERS:-$EMAIL}"
         echo "Comma-separated list of email addresses allowed to send tasks."
         ALLOWED_SENDERS=$(prompt_value "Allowed senders" "$allowed_default")
-
-        TASK_SUBJECT_PREFIX=$(prompt_value "Task subject prefix" "$TASK_SUBJECT_PREFIX")
         echo ""
 
         echo "Dev Mode via Email"
@@ -410,7 +405,6 @@ show_config() {
         echo "Email Tasks:"
         echo "  IMAP:         $IMAP_HOST:$IMAP_PORT"
         echo "  Allowed:      $ALLOWED_SENDERS"
-        echo "  Prefix:       $TASK_SUBJECT_PREFIX"
         if [ -n "$DEV_PROJECT_DIR" ]; then
             echo "  Dev project:  $DEV_PROJECT_DIR"
         fi

@@ -247,13 +247,13 @@ Send tasks to Pauly via email and get results back automatically.
 ### Usage
 
 Send an email to your configured address with:
-- **Subject** starting with `[PAULY]` (configurable)
+- **From** an allowed sender address (configured during setup)
 - **Body** containing the task you want executed
 
 Example:
 ```
 To: your-email@gmail.com
-Subject: [PAULY] Update dependencies
+Subject: Update dependencies
 
 Check all my projects for outdated npm dependencies
 and create a summary of what needs updating.
@@ -270,11 +270,11 @@ You can trigger autonomous development via email:
 
 | Subject | Body | Action |
 |---------|------|--------|
-| `[PAULY] dev init` | Project idea/description | Creates new project and initializes CONTEXT.md + TASKS.md |
-| `[PAULY] dev task` | Task description | Runs isolated task mode |
-| `[PAULY] dev 10` | (optional notes) | Runs 10 iterations of the dev loop |
-| `[PAULY] dev` | (optional notes) | Runs default 25 iterations |
-| `[PAULY] dev status` | - | Returns current development progress |
+| `dev init` | Project idea/description | Creates new project and initializes CONTEXT.md + TASKS.md |
+| `dev task` | Task description | Runs isolated task mode |
+| `dev 10` | (optional notes) | Runs 10 iterations of the dev loop |
+| `dev` | (optional notes) | Runs default 25 iterations |
+| `dev status` | - | Returns current development progress |
 
 To enable, run `pauly config` and set a **Dev project directory** when prompted.
 

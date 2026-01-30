@@ -12,7 +12,6 @@ IMAP_PORT="${IMAP_PORT:-993}"
 IMAP_USER="${SMTP_USER}"
 IMAP_PASSWORD="${SMTP_PASSWORD}"
 ALLOWED_SENDERS="${ALLOWED_SENDERS:-$EMAIL}"
-TASK_SUBJECT_PREFIX="${TASK_SUBJECT_PREFIX:-[PAULY]}"
 
 # Process dev commands from email
 # Usage: process_dev_command "dev init" "idea content" "/tmp/dir"
@@ -108,11 +107,11 @@ process_dev_command() {
             echo "Unknown dev command: $subcmd"
             echo ""
             echo "Available email dev commands:"
-            echo "  [PAULY] dev init     - Body contains the project idea"
-            echo "  [PAULY] dev task     - Body contains the task description"
-            echo "  [PAULY] dev 10       - Run 10 iterations"
-            echo "  [PAULY] dev          - Run default iterations"
-            echo "  [PAULY] dev status   - Show development progress"
+            echo "  dev init     - Body contains the project idea"
+            echo "  dev task     - Body contains the task description"
+            echo "  dev 10       - Run 10 iterations"
+            echo "  dev          - Run default iterations"
+            echo "  dev status   - Show development progress"
             return 1
             ;;
     esac
@@ -133,14 +132,13 @@ main() {
     local temp_dir=$(mktemp -d)
     trap "rm -rf $temp_dir" EXIT
 
-    # Fetch unread emails with task prefix using Python (more reliable than curl for IMAP)
+    # Fetch unread emails from allowed senders using Python (more reliable than curl for IMAP)
     # Pass credentials via environment to avoid escaping issues
     IMAP_HOST="$IMAP_HOST" \
     IMAP_PORT="$IMAP_PORT" \
     IMAP_USER="$IMAP_USER" \
     IMAP_PASSWORD="$IMAP_PASSWORD" \
     ALLOWED_SENDERS="$ALLOWED_SENDERS" \
-    TASK_SUBJECT_PREFIX="$TASK_SUBJECT_PREFIX" \
     TEMP_DIR="$temp_dir" \
     python3 << 'PYTHON_SCRIPT'
 import imaplib
@@ -154,7 +152,6 @@ imap_port = int(os.environ.get("IMAP_PORT", "993"))
 username = os.environ.get("IMAP_USER", "")
 password = os.environ.get("IMAP_PASSWORD", "")
 allowed_senders = os.environ.get("ALLOWED_SENDERS", "").lower().split(",")
-subject_prefix = os.environ.get("TASK_SUBJECT_PREFIX", "[PAULY]")
 temp_dir = os.environ.get("TEMP_DIR", "/tmp")
 
 try:
@@ -163,8 +160,8 @@ try:
     mail.login(username, password)
     mail.select("INBOX")
 
-    # Search for unread emails with subject prefix
-    status, messages = mail.search(None, 'UNSEEN', f'SUBJECT "{subject_prefix}"')
+    # Search for unread emails (no subject prefix required - sender validation provides security)
+    status, messages = mail.search(None, 'UNSEEN')
 
     if status != "OK":
         print("No messages found", file=sys.stderr)
@@ -223,6 +220,9 @@ except Exception as e:
 PYTHON_SCRIPT
 
     # Process each task file
+    # Track first task for session continuity
+    local first_email_task=true
+
     for task_file in "$temp_dir"/task_*.txt; do
         [ -f "$task_file" ] || continue
 
@@ -236,8 +236,8 @@ PYTHON_SCRIPT
         local result=""
         local reply_subject=""
 
-        # Extract command after prefix (e.g., "[PAULY] dev init" -> "dev init")
-        local cmd=$(echo "$subject" | sed "s/^${TASK_SUBJECT_PREFIX}[[:space:]]*//" | tr '[:upper:]' '[:lower:]')
+        # Extract command from subject (lowercase for matching)
+        local cmd=$(echo "$subject" | tr '[:upper:]' '[:lower:]')
 
         if [[ "$cmd" =~ ^dev ]]; then
             # Handle dev commands
@@ -245,7 +245,9 @@ PYTHON_SCRIPT
             reply_subject="Re: $subject - Dev Mode"
         else
             # Regular task - execute via Claude
-            result=$(claude --print "You received a task via email. Execute it and provide a summary of what you did.
+            # Use --continue for subsequent tasks to maintain context
+            if [[ "$first_email_task" == "true" ]]; then
+                result=$(claude --dangerously-skip-permissions -p "You received a task via email. Execute it and provide a summary of what you did.
 
 Subject: $subject
 
@@ -253,6 +255,28 @@ Task:
 $body
 
 Execute this task and provide a clear summary of the results." 2>&1)
+                first_email_task=false
+            else
+                # Continue session - Claude already has context from previous tasks
+                if ! result=$(claude --dangerously-skip-permissions --continue -p "Next email task:
+
+Subject: $subject
+
+Task:
+$body
+
+Execute this task and provide a summary." 2>&1); then
+                    # Fallback to fresh session if --continue fails
+                    result=$(claude --dangerously-skip-permissions -p "You received a task via email. Execute it and provide a summary of what you did.
+
+Subject: $subject
+
+Task:
+$body
+
+Execute this task and provide a clear summary of the results." 2>&1)
+                fi
+            fi
             reply_subject="Re: $subject - Completed"
         fi
 
