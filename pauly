@@ -65,6 +65,7 @@ cmd_help() {
     echo -e "  ${BOLD}run${NC} <job> [-bg]  Run a job manually (summary, git, research, all)"
     echo -e "  ${BOLD}dev${NC} [opts]       Autonomous development mode"
     echo -e "  ${BOLD}admin${NC} [cmd]      Manage admin dashboard (start/stop/status)"
+    echo -e "  ${BOLD}railway${NC} [cmd]    Railway deployment commands"
     echo -e "  ${BOLD}status${NC}           Show status of all scheduled jobs"
     echo -e "  ${BOLD}logs${NC} [job]       View logs (optionally for specific job)"
     echo -e "  ${BOLD}tail${NC} [job]       Follow logs in real-time"
@@ -700,6 +701,107 @@ cmd_admin() {
     esac
 }
 
+cmd_railway() {
+    local subcommand="${1:-help}"
+
+    # Check if railway CLI is installed
+    if ! command -v railway &> /dev/null; then
+        print_error "Railway CLI not installed"
+        echo "Install with: bash <(curl -fsSL cli.new)"
+        exit 1
+    fi
+
+    case "$subcommand" in
+        deploy|up)
+            shift
+            print_info "Deploying to Railway..."
+            railway up "$@"
+            ;;
+
+        link)
+            shift
+            print_info "Linking to Railway project..."
+            railway link "$@"
+            ;;
+
+        status)
+            print_info "Railway deployment status..."
+            railway status
+            ;;
+
+        logs)
+            shift
+            print_info "Railway logs..."
+            railway logs "$@"
+            ;;
+
+        env|vars|variables)
+            shift
+            local env_cmd="${1:-}"
+            case "$env_cmd" in
+                set)
+                    shift
+                    railway variables set "$@"
+                    ;;
+                unset|rm|remove)
+                    shift
+                    railway variables unset "$@"
+                    ;;
+                list|"")
+                    railway variables
+                    ;;
+                *)
+                    # Assume it's a set command: pauly railway env KEY=value
+                    railway variables set "$env_cmd" "$@"
+                    ;;
+            esac
+            ;;
+
+        init)
+            shift
+            print_info "Initializing Railway project..."
+            railway init "$@"
+            ;;
+
+        open)
+            print_info "Opening Railway dashboard..."
+            railway open
+            ;;
+
+        login)
+            print_info "Logging in to Railway..."
+            railway login
+            ;;
+
+        whoami)
+            railway whoami
+            ;;
+
+        help|--help|-h|"")
+            echo -e "${BOLD}Railway Commands:${NC}"
+            echo ""
+            echo "  pauly railway deploy       Deploy current directory to Railway"
+            echo "  pauly railway link         Link to existing Railway project"
+            echo "  pauly railway status       Check deployment status"
+            echo "  pauly railway logs         View deployment logs"
+            echo "  pauly railway env          List environment variables"
+            echo "  pauly railway env set K=V  Set environment variable"
+            echo "  pauly railway env unset K  Remove environment variable"
+            echo "  pauly railway init         Initialize new Railway project"
+            echo "  pauly railway open         Open project in browser"
+            echo "  pauly railway login        Authenticate with Railway"
+            echo "  pauly railway whoami       Show current Railway user"
+            echo ""
+            echo "For more options, use 'railway --help'"
+            ;;
+
+        *)
+            # Pass through to railway CLI
+            railway "$subcommand" "$@"
+            ;;
+    esac
+}
+
 cmd_dev() {
     ensure_claude_dev || exit 1
 
@@ -784,6 +886,10 @@ case "${1:-help}" in
         ;;
     admin)
         cmd_admin "$2"
+        ;;
+    railway)
+        shift
+        cmd_railway "$@"
         ;;
     status|st)
         cmd_status
