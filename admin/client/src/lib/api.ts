@@ -154,6 +154,17 @@ export async function fetchProjectDetail(name: string) {
   return res.project;
 }
 
+export async function deleteProject(name: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function addProjectTask(projectName: string, text: string) {
   const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/tasks`, {
     method: "POST",
@@ -210,6 +221,36 @@ export interface IssueJobStatus {
 
 export async function getIssueJobStatus(projectName: string, jobId: string) {
   return fetchApi<IssueJobStatus>(`/projects/${encodeURIComponent(projectName)}/issues/${encodeURIComponent(jobId)}`);
+}
+
+export interface DevError {
+  phase: string;
+  message: string;
+  file?: string;
+  line?: number;
+  suggestion?: string;
+}
+
+export interface DevJobStatus {
+  status: "idle" | "running" | "success" | "error";
+  startedAt?: string;
+  log?: string;
+  error?: DevError;
+}
+
+export async function getDevJobStatus(projectName: string) {
+  return fetchApi<DevJobStatus>(`/projects/${encodeURIComponent(projectName)}/dev`);
+}
+
+export async function clearDevLog(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/dev/log`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
 }
 
 export interface LogInfo {

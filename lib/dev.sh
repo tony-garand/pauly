@@ -75,20 +75,29 @@ ensure_claude_dev() {
 }
 
 # Run Claude with retry logic and session limit handling
+# Usage: run_claude_dev "prompt" "PHASE" ["true"|"false"]
+# Third arg: use_continue - if "true", uses --continue flag to maintain session context
 run_claude_dev() {
     local prompt="$1"
     local phase="$2"
+    local use_continue="${3:-false}"
     local attempt=1
     local output=""
     local exit_code=0
 
-    dev_log "INFO" "Starting $phase"
+    # Build continue flag
+    local continue_flag=""
+    if [[ "$use_continue" == "true" ]]; then
+        continue_flag="--continue"
+    fi
+
+    dev_log "INFO" "Starting $phase (continue=$use_continue)"
 
     while [[ $attempt -le $MAX_RETRIES ]]; do
         echo -e "${BLUE}  Running $phase (attempt $attempt/$MAX_RETRIES)...${NC}"
 
         set +e
-        output=$(claude --dangerously-skip-permissions -p "$prompt" 2>&1)
+        output=$(claude --dangerously-skip-permissions $continue_flag -p "$prompt" 2>&1)
         exit_code=$?
         set -e
 
@@ -402,7 +411,10 @@ dev_loop() {
 
         # Check if all tasks are done
         if [[ -f "$TASK_FILE" ]]; then
-            local unchecked=$(grep -c '^\s*- \[ \]' "$TASK_FILE" 2>/dev/null || echo "0")
+            local unchecked
+            unchecked=$(grep -c '^\s*- \[ \]' "$TASK_FILE" 2>/dev/null | head -1 || echo "0")
+            unchecked="${unchecked//[^0-9]/}"  # Strip non-numeric chars
+            [[ -z "$unchecked" ]] && unchecked=0
             if [[ "$unchecked" -eq 0 ]]; then
                 echo -e "${GREEN}All tasks complete!${NC}"
                 send_dev_notification "complete" "$iteration" "$start_time"
@@ -414,9 +426,9 @@ dev_loop() {
         # Clean up any stale .task file from previous iterations
         rm -f "$TASK_STATE"
 
-        # PLAN
+        # PLAN (fresh session - reads CONTEXT.md and TASKS.md)
         echo -e "${CYAN}[PLAN]${NC}"
-        run_claude_dev "$PLAN_PROMPT" "PLAN" || {
+        run_claude_dev "$PLAN_PROMPT" "PLAN" "false" || {
             echo -e "${RED}Plan failed, stopping${NC}"
             send_dev_notification "failed" "$iteration" "$start_time" "Plan phase failed"
             break
@@ -436,15 +448,15 @@ dev_loop() {
             continue
         fi
 
-        # EXECUTE
+        # EXECUTE (continues from PLAN - has full context)
         echo -e "${CYAN}[EXECUTE]${NC}"
-        run_claude_dev "$EXECUTE_PROMPT" "EXECUTE" || {
+        run_claude_dev "$EXECUTE_PROMPT" "EXECUTE" "true" || {
             echo -e "${RED}Execute failed${NC}"
         }
 
-        # REVIEW
+        # REVIEW (continues from EXECUTE - knows what was implemented)
         echo -e "${CYAN}[REVIEW]${NC}"
-        run_claude_dev "$REVIEW_PROMPT" "REVIEW" || {
+        run_claude_dev "$REVIEW_PROMPT" "REVIEW" "true" || {
             echo -e "${RED}Review failed${NC}"
         }
 
@@ -453,9 +465,9 @@ dev_loop() {
             echo -e "${GREEN}  Review passed!${NC}"
             rm -f "$TASK_STATE"
         else
-            # FIX
+            # FIX (continues from REVIEW - knows what issues were found)
             echo -e "${CYAN}[FIX]${NC}"
-            run_claude_dev "$FIX_PROMPT" "FIX" || {
+            run_claude_dev "$FIX_PROMPT" "FIX" "true" || {
                 echo -e "${RED}Fix failed${NC}"
             }
             rm -f "$TASK_STATE"

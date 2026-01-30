@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -28,19 +28,30 @@ import {
   Trash2,
   Loader2,
   MessageSquarePlus,
+  Sparkles,
+  AlertTriangle,
+  RefreshCw,
+  Terminal,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   fetchProjectDetail,
   addProjectTask,
   toggleProjectTask,
   deleteProjectTask,
+  deleteProject,
   createProjectIssue,
   getIssueJobStatus,
+  getDevJobStatus,
+  clearDevLog,
   type ProjectDetail as ProjectDetailType,
+  type DevJobStatus,
 } from "@/lib/api";
 
 export function ProjectDetail() {
   const { name } = useParams<{ name: string }>();
+  const navigate = useNavigate();
   const [project, setProject] = useState<ProjectDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +61,9 @@ export function ProjectDetail() {
   const [issueTitle, setIssueTitle] = useState("");
   const [issueBody, setIssueBody] = useState("");
   const [creatingIssue, setCreatingIssue] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [devStatus, setDevStatus] = useState<DevJobStatus | null>(null);
+  const [showDevLog, setShowDevLog] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!name) return;
@@ -68,6 +82,35 @@ export function ProjectDetail() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Poll dev status
+  const loadDevStatus = useCallback(async () => {
+    if (!name) return;
+    try {
+      const status = await getDevJobStatus(name);
+      setDevStatus(status);
+    } catch {
+      // Ignore errors
+    }
+  }, [name]);
+
+  useEffect(() => {
+    loadDevStatus();
+    // Poll every 5 seconds
+    const interval = setInterval(loadDevStatus, 5000);
+    return () => clearInterval(interval);
+  }, [loadDevStatus]);
+
+  const handleClearDevLog = async () => {
+    if (!name) return;
+    try {
+      await clearDevLog(name);
+      setDevStatus(null);
+      setShowDevLog(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to clear log");
+    }
+  };
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,6 +175,8 @@ export function ProjectDetail() {
               setIssueBody("");
               setShowIssueForm(false);
               await loadData();
+              // Immediately refresh dev status to show Claude is working
+              await loadDevStatus();
             } else {
               setError("Failed to generate tasks: " + status.output);
             }
@@ -148,6 +193,23 @@ export function ProjectDetail() {
     } catch (err) {
       setCreatingIssue(false);
       setError(err instanceof Error ? err.message : "Failed to create issue");
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!name) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${name}"?\n\nThis will permanently delete the local project folder. The GitHub repository will NOT be deleted.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      await deleteProject(name);
+      navigate("/projects");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete project");
+      setDeleting(false);
     }
   };
 
@@ -194,17 +256,33 @@ export function ProjectDetail() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">{project.path}</p>
         </div>
-        {project.githubUrl && (
-          <a
-            href={project.githubUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        <div className="flex items-center gap-3">
+          {project.githubUrl && (
+            <a
+              href={project.githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ExternalLink className="h-4 w-4" />
+              GitHub
+            </a>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeleteProject}
+            disabled={deleting}
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
           >
-            <ExternalLink className="h-4 w-4" />
-            GitHub
-          </a>
-        )}
+            {deleting ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-1" />
+            )}
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+        </div>
       </div>
 
       {/* Status badges and info */}
@@ -309,6 +387,97 @@ export function ProjectDetail() {
                 className="h-full bg-primary transition-all"
                 style={{ width: `${percentage}%` }}
               />
+            </div>
+          )}
+          {/* Dev status indicator */}
+          {devStatus && devStatus.status !== "idle" && (
+            <div className="mt-3 space-y-2">
+              {/* Running indicator */}
+              {devStatus.status === "running" && !devStatus.error && (
+                <div className="flex items-center gap-2 text-sm text-primary animate-pulse">
+                  <Sparkles className="h-4 w-4" />
+                  <span>Claude is working on these tasks...</span>
+                </div>
+              )}
+
+              {/* Error display */}
+              {devStatus.error && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-destructive font-medium">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>Error in {devStatus.error.phase} phase</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearDevLog}
+                      className="h-7 text-xs"
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  </div>
+
+                  {/* Error details */}
+                  <div className="text-sm space-y-1">
+                    {devStatus.error.file && (
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {devStatus.error.file}
+                        {devStatus.error.line && `:${devStatus.error.line}`}
+                      </p>
+                    )}
+                    <p className="text-destructive">{devStatus.error.message}</p>
+                  </div>
+
+                  {/* Suggestion for Pauly */}
+                  {devStatus.error.suggestion && (
+                    <div className="p-2 bg-background rounded border text-sm">
+                      <p className="text-xs text-muted-foreground mb-1">Fix suggestion:</p>
+                      <p className="font-medium">{devStatus.error.suggestion}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Success indicator */}
+              {devStatus.status === "success" && (
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Development complete</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearDevLog}
+                    className="h-6 text-xs ml-auto"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
+
+              {/* Log viewer toggle */}
+              {devStatus.log && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDevLog(!showDevLog)}
+                  className="w-full justify-between text-xs h-7"
+                >
+                  <span className="flex items-center gap-1">
+                    <Terminal className="h-3 w-3" />
+                    View dev log
+                  </span>
+                  {showDevLog ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </Button>
+              )}
+
+              {/* Log content */}
+              {showDevLog && devStatus.log && (
+                <pre className="p-3 bg-muted rounded-lg text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">
+                  {devStatus.log.replace(/\x1b\[\d+m/g, "")}
+                </pre>
+              )}
             </div>
           )}
         </CardHeader>

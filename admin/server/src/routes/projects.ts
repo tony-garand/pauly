@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from "express";
-import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, createIssue, getIssueJobStatus } from "../lib/projects.js";
+import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog } from "../lib/projects.js";
 
 const router: RouterType = Router();
 
@@ -18,6 +18,19 @@ router.get("/:name", (req, res) => {
   }
 
   res.json({ project });
+});
+
+// Delete a project (removes local directory only, not GitHub repo)
+router.delete("/:name", (req, res) => {
+  const { name } = req.params;
+  const result = deleteProject(name);
+
+  if (!result.success) {
+    res.status(result.error === "Project not found" ? 404 : 500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
 });
 
 // Add a new task
@@ -102,6 +115,20 @@ router.get("/:name/issues/:jobId", (req, res) => {
   }
 
   res.json(status);
+});
+
+// Get dev job status for a project
+router.get("/:name/dev", (req, res) => {
+  const { name } = req.params;
+  const status = getDevJobStatus(name);
+  res.json(status);
+});
+
+// Clear dev log for a project
+router.delete("/:name/dev/log", (req, res) => {
+  const { name } = req.params;
+  const success = clearDevLog(name);
+  res.json({ success });
 });
 
 export default router;

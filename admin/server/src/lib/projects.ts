@@ -1,4 +1,4 @@
-import { readdirSync, existsSync, readFileSync, statSync, writeFileSync } from "fs";
+import { readdirSync, existsSync, readFileSync, statSync, writeFileSync, rmSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execFileSync, spawn } from "child_process";
@@ -361,11 +361,206 @@ export function deleteTask(projectName: string, taskIndex: number): boolean {
   }
 }
 
+export function deleteProject(projectName: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+
+  // Validate project exists
+  if (!existsSync(projectPath)) {
+    return { success: false, error: "Project not found" };
+  }
+
+  // Validate it's a directory
+  try {
+    const stat = statSync(projectPath);
+    if (!stat.isDirectory()) {
+      return { success: false, error: "Not a directory" };
+    }
+  } catch {
+    return { success: false, error: "Cannot access project" };
+  }
+
+  // Prevent path traversal attacks
+  if (projectName.includes("..") || projectName.includes("/") || projectName.includes("\\")) {
+    return { success: false, error: "Invalid project name" };
+  }
+
+  // Delete the project directory recursively
+  try {
+    rmSync(projectPath, { recursive: true, force: true });
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to delete project: ${errorMsg}` };
+  }
+}
+
 // Issue processing jobs
 const issueJobs = new Map<string, { status: "running" | "success" | "error"; output: string; tasks?: string[] }>();
 
 export function getIssueJobStatus(jobId: string) {
   return issueJobs.get(jobId);
+}
+
+// Dev job tracking per project
+interface DevJobStatus {
+  status: "idle" | "running" | "success" | "error";
+  startedAt?: string;
+  log?: string;
+  error?: {
+    phase: string;
+    message: string;
+    file?: string;
+    line?: number;
+    suggestion?: string;
+  };
+}
+
+function getDevLogPath(projectName: string): string {
+  return join(homedir(), ".pauly", "logs", `dev-${projectName}.log`);
+}
+
+function parseDevErrors(log: string): DevJobStatus["error"] | undefined {
+  // Look for common error patterns and extract actionable info
+  const lines = log.split("\n");
+
+  // Check for syntax errors in bash scripts
+  const bashError = log.match(/([^:\s]+\.sh): line (\d+): (.+)/);
+  if (bashError) {
+    return {
+      phase: "dev-loop",
+      message: bashError[3],
+      file: bashError[1],
+      line: parseInt(bashError[2]),
+      suggestion: `Fix syntax error in ${bashError[1]} at line ${bashError[2]}: ${bashError[3]}`
+    };
+  }
+
+  // Check for TypeScript/JavaScript errors
+  const tsError = log.match(/([^:\s]+\.[tj]sx?):(\d+):(\d+)[:\s]+(.+)/);
+  if (tsError) {
+    return {
+      phase: "execute",
+      message: tsError[4],
+      file: tsError[1],
+      line: parseInt(tsError[2]),
+      suggestion: `Fix error in ${tsError[1]} at line ${tsError[2]}: ${tsError[4]}`
+    };
+  }
+
+  // Check for test failures
+  const testFail = log.match(/FAIL\s+(.+\.test\.[tj]sx?)/);
+  if (testFail) {
+    // Find the actual error message
+    const errorMatch = log.match(/Error: (.+?)(?:\n|$)/);
+    return {
+      phase: "review",
+      message: errorMatch ? errorMatch[1] : "Test failed",
+      file: testFail[1],
+      suggestion: `Fix failing test in ${testFail[1]}: ${errorMatch?.[1] || "check test output"}`
+    };
+  }
+
+  // Check for Claude/API errors
+  const claudeError = log.match(/Error:?\s*(rate limit|session limit|API|timeout)/i);
+  if (claudeError) {
+    return {
+      phase: "api",
+      message: claudeError[0],
+      suggestion: "Wait and retry - API limit reached"
+    };
+  }
+
+  // Generic error detection
+  const genericError = log.match(/\[?ERROR\]?\s*(.+)/i);
+  if (genericError) {
+    return {
+      phase: "unknown",
+      message: genericError[1],
+      suggestion: genericError[1]
+    };
+  }
+
+  // Check for red text (ANSI escape for errors)
+  const redText = log.match(/\x1b\[31m(.+?)\x1b/);
+  if (redText) {
+    return {
+      phase: "unknown",
+      message: redText[1].replace(/\x1b\[\d+m/g, ""),
+      suggestion: redText[1].replace(/\x1b\[\d+m/g, "")
+    };
+  }
+
+  return undefined;
+}
+
+export function getDevJobStatus(projectName: string): DevJobStatus {
+  const logPath = getDevLogPath(projectName);
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+
+  // Check if dev process is running for this project
+  try {
+    const psOutput = execFileSync("pgrep", ["-f", `pauly dev.*${projectPath}`], {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    }).trim();
+
+    if (psOutput) {
+      // Process is running - read current log
+      let log = "";
+      if (existsSync(logPath)) {
+        log = readFileSync(logPath, "utf-8");
+        // Get last 100 lines for display
+        const lines = log.split("\n");
+        log = lines.slice(-100).join("\n");
+      }
+
+      const error = parseDevErrors(log);
+      return {
+        status: error ? "error" : "running",
+        log,
+        error
+      };
+    }
+  } catch {
+    // pgrep returns non-zero if no processes found
+  }
+
+  // Process not running - check log for final status
+  if (!existsSync(logPath)) {
+    return { status: "idle" };
+  }
+
+  const log = readFileSync(logPath, "utf-8");
+  const lines = log.split("\n");
+  const lastLines = lines.slice(-100).join("\n");
+
+  // Check for completion
+  if (log.includes("All tasks complete!") || log.includes("Development loop complete")) {
+    return { status: "success", log: lastLines };
+  }
+
+  // Check for errors
+  const error = parseDevErrors(log);
+  if (error) {
+    return { status: "error", log: lastLines, error };
+  }
+
+  return { status: "idle", log: lastLines };
+}
+
+export function clearDevLog(projectName: string): boolean {
+  const logPath = getDevLogPath(projectName);
+  if (existsSync(logPath)) {
+    try {
+      rmSync(logPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function createIssue(projectName: string, title: string, body: string): string {
@@ -431,6 +626,21 @@ Output format (no other text):
       }
 
       writeFileSync(tasksPath, content);
+
+      // Spawn pauly dev in background to work on tasks
+      const paulyPath = join(homedir(), ".pauly", "pauly");
+      const logPath = getDevLogPath(projectName);
+      // Clear previous log and start fresh
+      if (existsSync(logPath)) {
+        rmSync(logPath);
+      }
+      const cmd = `cd "${projectPath}" && "${paulyPath}" dev >> "${logPath}" 2>&1`;
+      spawn("bash", ["-c", cmd], {
+        detached: true,
+        stdio: "ignore",
+        env: { ...process.env, TERM: "dumb" }
+      }).unref();
+
       issueJobs.set(jobId, { status: "success", output, tasks });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
