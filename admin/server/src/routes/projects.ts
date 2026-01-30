@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from "express";
-import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog } from "../lib/projects.js";
+import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo } from "../lib/projects.js";
 
 const router: RouterType = Router();
 
@@ -31,6 +31,28 @@ router.delete("/:name", (req, res) => {
   }
 
   res.json({ success: true });
+});
+
+// Import a GitHub repository
+router.post("/import", (req, res) => {
+  const { url, name } = req.body;
+
+  if (!url || typeof url !== "string") {
+    res.status(400).json({ error: "URL is required" });
+    return;
+  }
+
+  const result = cloneGitHubRepo(url.trim(), name?.trim());
+
+  if (!result.success) {
+    // Determine appropriate status code
+    const statusCode = result.error?.includes("already exists") ? 409 :
+                       result.error?.includes("Invalid") ? 400 : 500;
+    res.status(statusCode).json({ error: result.error });
+    return;
+  }
+
+  res.status(201).json({ project: result.project });
 });
 
 // Add a new task
