@@ -15,6 +15,7 @@ source "$SCRIPT_DIR/lib/config.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/common.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/dev.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/autofix.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/lib/railway.sh" 2>/dev/null || true
 
 VERSION="1.0.0"
 CRON_MARKER="# pauly-job"
