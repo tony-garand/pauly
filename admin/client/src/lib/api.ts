@@ -290,3 +290,70 @@ export async function fetchLogContent(job: string, tail?: number) {
   const params = tail ? `?tail=${tail}` : "";
   return fetchApi<{ log: LogContent }>(`/pauly/logs/${encodeURIComponent(job)}${params}`);
 }
+
+// Railway API types and functions
+export interface RailwayStatus {
+  authenticated: boolean;
+  user?: string;
+  error?: string;
+}
+
+export interface RailwayProject {
+  id: string;
+  name: string;
+  environments?: string[];
+}
+
+export interface RailwayDeployment {
+  id: string;
+  projectId: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function fetchRailwayStatus() {
+  return fetchApi<RailwayStatus>("/railway/status");
+}
+
+export async function fetchRailwayProjects() {
+  return fetchApi<{ projects: RailwayProject[] }>("/railway/projects");
+}
+
+export async function fetchRailwayProjectDetails(projectId: string) {
+  return fetchApi<{ project: RailwayProject }>(`/railway/projects/${encodeURIComponent(projectId)}`);
+}
+
+export async function deployToRailway(projectId: string, detach?: boolean) {
+  const response = await fetch(`${API_BASE}/railway/projects/${encodeURIComponent(projectId)}/deploy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ detach }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json() as Promise<{ success: boolean; message?: string }>;
+}
+
+export async function fetchRailwayLogs(projectId: string, lines?: number) {
+  const params = lines ? `?lines=${lines}` : "";
+  return fetchApi<{ logs: string }>(`/railway/projects/${encodeURIComponent(projectId)}/logs${params}`);
+}
+
+export async function linkProjectToRailway(projectPath: string, railwayProjectId?: string) {
+  const response = await fetch(`${API_BASE}/railway/link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectPath, railwayProjectId }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json() as Promise<{ success: boolean; message?: string }>;
+}
+
+export async function fetchRailwayDeployments() {
+  return fetchApi<{ deployments: RailwayDeployment[] }>("/railway/deployments");
+}
