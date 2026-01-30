@@ -395,6 +395,67 @@ export function deleteProject(projectName: string): { success: boolean; error?: 
   }
 }
 
+// GitHub URL parsing result
+export interface ParsedGitHubUrl {
+  owner: string;
+  repo: string;
+  cloneUrl: string;
+}
+
+/**
+ * Parses various GitHub URL formats and normalizes them.
+ * Supported formats:
+ * - https://github.com/owner/repo
+ * - https://github.com/owner/repo.git
+ * - git@github.com:owner/repo.git
+ * - owner/repo (shorthand)
+ *
+ * @param url - The GitHub URL or shorthand to parse
+ * @returns Parsed URL info with owner, repo, and normalized clone URL
+ * @throws Error if the URL format is invalid
+ */
+export function parseGitHubUrl(url: string): ParsedGitHubUrl {
+  const trimmed = url.trim();
+
+  // Pattern for HTTPS URLs: https://github.com/owner/repo or https://github.com/owner/repo.git
+  const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(\.git)?$/);
+  if (httpsMatch) {
+    const owner = httpsMatch[1];
+    const repo = httpsMatch[2];
+    return {
+      owner,
+      repo,
+      cloneUrl: `https://github.com/${owner}/${repo}.git`,
+    };
+  }
+
+  // Pattern for SSH URLs: git@github.com:owner/repo.git
+  const sshMatch = trimmed.match(/^git@github\.com:([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(\.git)?$/);
+  if (sshMatch) {
+    const owner = sshMatch[1];
+    const repo = sshMatch[2];
+    return {
+      owner,
+      repo,
+      cloneUrl: `https://github.com/${owner}/${repo}.git`,
+    };
+  }
+
+  // Pattern for shorthand: owner/repo
+  const shorthandMatch = trimmed.match(/^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)$/);
+  if (shorthandMatch) {
+    const owner = shorthandMatch[1];
+    const repo = shorthandMatch[2];
+    return {
+      owner,
+      repo,
+      cloneUrl: `https://github.com/${owner}/${repo}.git`,
+    };
+  }
+
+  throw new Error(`Invalid GitHub URL format: ${url}`);
+}
+
 // Issue processing jobs
 const issueJobs = new Map<string, { status: "running" | "success" | "error"; output: string; tasks?: string[] }>();
 
