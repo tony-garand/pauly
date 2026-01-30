@@ -117,6 +117,20 @@ export async function fetchProjects() {
   return fetchApi<{ projects: ProjectInfo[] }>("/projects");
 }
 
+export async function importRepo(url: string, name?: string): Promise<ProjectInfo> {
+  const response = await fetch(`${API_BASE}/projects/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, name }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  const result = await response.json();
+  return result.project;
+}
+
 export async function fetchPaulyStatus() {
   return fetchApi<PaulyStatus>("/pauly/status");
 }
