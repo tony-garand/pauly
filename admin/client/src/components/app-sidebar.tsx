@@ -7,6 +7,7 @@ import {
   Settings,
   Bot,
   Activity,
+  Train,
 } from "lucide-react"
 
 import {
@@ -52,6 +53,11 @@ const systemItems = [
     title: "CLIs",
     url: "/clis",
     icon: Terminal,
+  },
+  {
+    title: "Railway",
+    url: "/railway",
+    icon: Train,
   },
   {
     title: "Config",
