@@ -149,6 +149,12 @@ cmd_status() {
         echo -e "  ${RED}○${NC} ${BOLD}tasks${NC}    - every 5 minutes (disabled)"
     fi
 
+    if echo "$current_cron" | grep -q "$CRON_MARKER:dev"; then
+        echo -e "  ${GREEN}●${NC} ${BOLD}dev${NC}      - every 5 minutes (ensure dev running)"
+    else
+        echo -e "  ${RED}○${NC} ${BOLD}dev${NC}      - every 5 minutes (disabled)"
+    fi
+
     echo ""
     echo -e "${BOLD}Recent Activity:${NC}"
     echo ""
@@ -449,14 +455,20 @@ cmd_enable() {
             # Use a wrapper that runs both configured task systems
             script_path="$SCRIPT_DIR/pauly run tasks"
             ;;
+        dev)
+            job="dev"
+            cron_schedule="*/5 * * * *"  # Every 5 minutes
+            script_path="$SCRIPT_DIR/ensure-dev-running.sh"
+            ;;
         all)
             cmd_enable "summary"
             cmd_enable "git"
             cmd_enable "research"
+            cmd_enable "dev"
             return
             ;;
         "")
-            print_error "Please specify a job: summary, git, research, or all"
+            print_error "Please specify a job: summary, git, research, dev, or all"
             exit 1
             ;;
         *)
