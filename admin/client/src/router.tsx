@@ -7,6 +7,7 @@ import { Logs } from "@/pages/Logs";
 import { CLIs } from "@/pages/CLIs";
 import { Status } from "@/pages/Status";
 import { Config } from "@/pages/Config";
+import { Railway } from "@/pages/Railway";
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
       {
         path: "config",
         element: <Config />,
+      },
+      {
+        path: "railway",
+        element: <Railway />,
       },
     ],
   },
