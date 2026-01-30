@@ -67,11 +67,28 @@ log_dev_failure() {
 
 # Check for Claude CLI
 ensure_claude_dev() {
-    if ! command -v claude &> /dev/null; then
-        echo -e "${RED}Error: Claude CLI not found${NC}"
-        echo "Install with: npm install -g @anthropic-ai/claude-code"
-        return 1
+    if command -v claude &> /dev/null; then
+        return 0
     fi
+
+    # Check common locations (cron/subprocess doesn't have full PATH)
+    local claude_paths=(
+        "$HOME/.local/bin/claude"
+        "/usr/local/bin/claude"
+        "$HOME/.claude/local/claude"
+        "$HOME/.npm-global/bin/claude"
+    )
+
+    for path in "${claude_paths[@]}"; do
+        if [ -x "$path" ]; then
+            export PATH="$(dirname "$path"):$PATH"
+            return 0
+        fi
+    done
+
+    echo -e "${RED}Error: Claude CLI not found${NC}"
+    echo "Install with: npm install -g @anthropic-ai/claude-code"
+    return 1
 }
 
 # Run Claude with retry logic and session limit handling

@@ -84,10 +84,25 @@ autofix_is_eligible() {
         fi
     fi
 
-    # Check if claude CLI is available
+    # Check if claude CLI is available (check fallback paths for cron)
     if ! command -v claude &> /dev/null; then
-        autofix_log "Claude CLI not found - cannot analyze error"
-        return 1
+        local claude_paths=(
+            "$HOME/.local/bin/claude"
+            "/usr/local/bin/claude"
+            "$HOME/.claude/local/claude"
+        )
+        local found=false
+        for path in "${claude_paths[@]}"; do
+            if [ -x "$path" ]; then
+                export PATH="$(dirname "$path"):$PATH"
+                found=true
+                break
+            fi
+        done
+        if [ "$found" = false ]; then
+            autofix_log "Claude CLI not found - cannot analyze error"
+            return 1
+        fi
     fi
 
     # Check if gh CLI is available
