@@ -33,6 +33,7 @@ const DEFAULT_CLI_LIST: CliEntry[] = [
   { name: "java", versionFlag: "-version" },
   { name: "deno", versionFlag: "--version" },
   { name: "bun", versionFlag: "--version" },
+  { name: "railway", versionFlag: "--version" },
 ];
 
 const CUSTOM_CLIS_FILE = join(homedir(), ".config", "pauly", "custom-clis.json");
