@@ -456,6 +456,76 @@ export function parseGitHubUrl(url: string): ParsedGitHubUrl {
   throw new Error(`Invalid GitHub URL format: ${url}`);
 }
 
+// Clone result type
+export interface CloneResult {
+  success: boolean;
+  project?: ProjectInfo;
+  error?: string;
+}
+
+/**
+ * Clones a GitHub repository to the projects directory.
+ *
+ * @param url - The GitHub URL to clone (any supported format)
+ * @param name - Optional custom directory name (defaults to repo name)
+ * @returns CloneResult with success status and project info or error
+ */
+export function cloneGitHubRepo(url: string, name?: string): CloneResult {
+  // Validate and parse the URL
+  let parsed: ParsedGitHubUrl;
+  try {
+    parsed = parseGitHubUrl(url);
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Invalid URL format",
+    };
+  }
+
+  const projectsDir = getProjectsDir();
+  const targetName = name?.trim() || parsed.repo;
+  const targetPath = join(projectsDir, targetName);
+
+  // Check if target directory already exists
+  if (existsSync(targetPath)) {
+    return {
+      success: false,
+      error: `Directory already exists: ${targetName}`,
+    };
+  }
+
+  // Clone the repository
+  try {
+    execFileSync("git", ["clone", parsed.cloneUrl, targetPath], {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120000, // 2 minute timeout for clone
+    });
+
+    // Get and return the project info
+    const project = getProjectInfo(targetPath, targetName);
+    return {
+      success: true,
+      project,
+    };
+  } catch (err) {
+    // Clean up partial clone if it exists
+    if (existsSync(targetPath)) {
+      try {
+        rmSync(targetPath, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      error: `Clone failed: ${errorMsg}`,
+    };
+  }
+}
+
 // Issue processing jobs
 const issueJobs = new Map<string, { status: "running" | "success" | "error"; output: string; tasks?: string[] }>();
 
