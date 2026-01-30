@@ -97,10 +97,27 @@ pauly admin logs          # View server logs
 
 ### Dashboard Features
 - **Status**: View scheduled job states and Pauly configuration
-- **Projects**: Browse projects with git status, task progress, and Railway deployment
+- **Projects**: Browse projects with git status, task progress, dev cycle status, and Railway deployment
 - **Railway**: View Railway auth status and list cloud projects
 - **CLIs**: Check installed/missing CLI tools
 - **Logs**: View and tail log files with auto-refresh
+
+### Dev Cycle Monitoring
+
+The Projects page shows real-time dev cycle status for each project:
+
+- **Dev Running** (blue, pulsing): A `pauly dev` cycle is currently running
+- **Running (errors)** (yellow): Dev cycle running but has encountered errors
+- **Complete** (green): Dev cycle finished successfully
+- **Error** (red): Dev cycle stopped with errors
+
+The summary card shows the count of projects with active dev cycles. The page polls every 10 seconds for updates.
+
+Individual project pages show detailed dev logs with:
+- Phase identification (plan, execute, review, fix)
+- Error parsing with file/line information
+- Suggested fixes for common errors
+- Full log viewer
 
 ### Configuration
 Add to `~/.config/pauly/config`:

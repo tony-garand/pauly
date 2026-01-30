@@ -17,6 +17,11 @@ export interface CliInfo {
   isCustom?: boolean;
 }
 
+export interface DevStatus {
+  status: "idle" | "running" | "success" | "error";
+  hasError?: boolean;
+}
+
 export interface ProjectInfo {
   name: string;
   path: string;
@@ -28,6 +33,7 @@ export interface ProjectInfo {
     percentage: number;
   };
   hasContextMd: boolean;
+  devStatus?: DevStatus;
 }
 
 export interface TaskItem {

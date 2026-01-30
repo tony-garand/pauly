@@ -13,6 +13,9 @@ import {
   GitBranch,
   FileText,
   ExternalLink,
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { fetchProjects, type ProjectInfo } from "@/lib/api";
 
@@ -36,6 +39,9 @@ export function Projects() {
 
   useEffect(() => {
     loadData();
+    // Poll for updates every 10 seconds to catch dev status changes
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
   }, [loadData]);
 
   if (loading) {
@@ -48,6 +54,7 @@ export function Projects() {
 
   const projectsWithGit = projects.filter((p) => p.hasGit).length;
   const projectsWithTasks = projects.filter((p) => p.tasksCompletion).length;
+  const projectsWithDevRunning = projects.filter((p) => p.devStatus?.status === "running").length;
 
   return (
     <div className="space-y-6">
@@ -72,6 +79,12 @@ export function Projects() {
             </p>
           </div>
           <div className="flex gap-2">
+            {projectsWithDevRunning > 0 && (
+              <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 gap-1">
+                <Sparkles className="h-3 w-3 animate-pulse" />
+                {projectsWithDevRunning} dev running
+              </Badge>
+            )}
             <Badge variant="secondary">
               {projectsWithGit} with git
             </Badge>
@@ -113,6 +126,28 @@ export function Projects() {
 
               {/* Status Badges */}
               <div className="flex gap-1.5 shrink-0">
+                {/* Dev Status */}
+                {project.devStatus?.status === "running" && (
+                  <Badge
+                    variant="default"
+                    className={`text-xs gap-1 ${project.devStatus.hasError ? "bg-yellow-500 hover:bg-yellow-600" : "bg-blue-500 hover:bg-blue-600"}`}
+                  >
+                    <Sparkles className="h-3 w-3 animate-pulse" />
+                    {project.devStatus.hasError ? "Running (errors)" : "Dev Running"}
+                  </Badge>
+                )}
+                {project.devStatus?.status === "success" && (
+                  <Badge variant="default" className="text-xs gap-1 bg-green-500 hover:bg-green-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Complete
+                  </Badge>
+                )}
+                {project.devStatus?.status === "error" && (
+                  <Badge variant="destructive" className="text-xs gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Error
+                  </Badge>
+                )}
                 {project.hasGit && (
                   <Badge variant="outline" className="text-xs">
                     <GitBranch className="h-3 w-3 mr-1" />

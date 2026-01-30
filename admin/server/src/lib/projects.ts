@@ -9,6 +9,11 @@ export interface TaskItem {
   completed: boolean;
 }
 
+export interface DevStatus {
+  status: "idle" | "running" | "success" | "error";
+  hasError?: boolean;
+}
+
 export interface ProjectInfo {
   name: string;
   path: string;
@@ -20,6 +25,7 @@ export interface ProjectInfo {
     percentage: number;
   };
   hasContextMd: boolean;
+  devStatus?: DevStatus;
 }
 
 export interface ProjectDetail extends ProjectInfo {
@@ -94,6 +100,54 @@ function parseTasksCompletion(projectPath: string): ProjectInfo["tasksCompletion
   }
 }
 
+function getQuickDevStatus(projectName: string, projectPath: string): DevStatus | undefined {
+  const logPath = join(homedir(), ".pauly", "logs", `dev-${projectName}.log`);
+
+  // Check if dev process is running for this project
+  try {
+    const psOutput = execFileSync("pgrep", ["-f", `pauly dev.*${projectPath}`], {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    }).trim();
+
+    if (psOutput) {
+      // Process is running - check for errors in log
+      if (existsSync(logPath)) {
+        const log = readFileSync(logPath, "utf-8");
+        const hasError = /\[?ERROR\]?|FAIL\s+.*\.test\.|error:|Error:/i.test(log);
+        return { status: "running", hasError };
+      }
+      return { status: "running" };
+    }
+  } catch {
+    // pgrep returns non-zero if no processes found
+  }
+
+  // Process not running - check log for final status
+  if (!existsSync(logPath)) {
+    return undefined; // No dev activity
+  }
+
+  try {
+    const log = readFileSync(logPath, "utf-8");
+
+    // Check for completion
+    if (log.includes("All tasks complete!") || log.includes("Development loop complete")) {
+      return { status: "success" };
+    }
+
+    // Check for errors
+    const hasError = /\[?ERROR\]?|FAIL\s+.*\.test\.|error:|Error:/i.test(log);
+    if (hasError) {
+      return { status: "error", hasError: true };
+    }
+
+    return { status: "idle" };
+  } catch {
+    return undefined;
+  }
+}
+
 export function getProjectInfo(projectPath: string, name: string): ProjectInfo {
   const hasGit = existsSync(join(projectPath, ".git"));
   const hasContextMd = existsSync(join(projectPath, "CONTEXT.md"));
@@ -112,6 +166,12 @@ export function getProjectInfo(projectPath: string, name: string): ProjectInfo {
   const tasksCompletion = parseTasksCompletion(projectPath);
   if (tasksCompletion) {
     info.tasksCompletion = tasksCompletion;
+  }
+
+  // Add dev status
+  const devStatus = getQuickDevStatus(name, projectPath);
+  if (devStatus) {
+    info.devStatus = devStatus;
   }
 
   return info;
