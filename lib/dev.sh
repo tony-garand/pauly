@@ -20,6 +20,12 @@ ensure_dev_dirs() {
     mkdir -p "$DEV_DIR" "$DEV_LOG_DIR" "$DEV_TASK_DIR"
 }
 
+# Timestamped echo for console output
+ts_echo() {
+    local timestamp=$(date '+%H:%M:%S')
+    echo -e "[$timestamp] $1"
+}
+
 # Development logging
 dev_log() {
     local level="$1"
@@ -62,7 +68,7 @@ log_dev_failure() {
     } > "$fail_file"
 
     dev_log "ERROR" "Failure logged to $fail_file"
-    echo -e "${YELLOW}  Failure details saved to: $fail_file${NC}"
+    ts_echo "${YELLOW}Failure details saved to: $fail_file${NC}"
 }
 
 # Check for Claude CLI
@@ -86,7 +92,7 @@ ensure_claude_dev() {
         fi
     done
 
-    echo -e "${RED}Error: Claude CLI not found${NC}"
+    ts_echo "${RED}Error: Claude CLI not found${NC}"
     echo "Install with: npm install -g @anthropic-ai/claude-code"
     return 1
 }
@@ -111,7 +117,7 @@ run_claude_dev() {
     dev_log "INFO" "Starting $phase (continue=$use_continue)"
 
     while [[ $attempt -le $MAX_RETRIES ]]; do
-        echo -e "${BLUE}  Running $phase (attempt $attempt/$MAX_RETRIES)...${NC}"
+        ts_echo "${BLUE}Running $phase (attempt $attempt/$MAX_RETRIES)...${NC}"
 
         set +e
         output=$(claude --dangerously-skip-permissions $continue_flag -p "$prompt" 2>&1)
@@ -128,7 +134,7 @@ run_claude_dev() {
         # Check for rate limit / overloaded
         if echo "$output" | grep -qiE "overloaded|rate.limit|too.many.requests|529|503"; then
             dev_log "WARN" "$phase failed (overloaded), attempt $attempt"
-            echo -e "${YELLOW}  API overloaded, waiting ${RETRY_DELAY}s...${NC}"
+            ts_echo "${YELLOW}API overloaded, waiting ${RETRY_DELAY}s...${NC}"
             sleep $RETRY_DELAY
             ((attempt++))
             continue
@@ -137,7 +143,7 @@ run_claude_dev() {
         # Check for session limit
         if echo "$output" | grep -qiE "session.limit|concurrent|maximum.sessions"; then
             dev_log "WARN" "$phase hit session limit"
-            echo -e "${YELLOW}  Session limit reached, waiting ${SESSION_WAIT}s...${NC}"
+            ts_echo "${YELLOW}Session limit reached, waiting ${SESSION_WAIT}s...${NC}"
             sleep $SESSION_WAIT
             ((attempt++))
             continue
@@ -145,12 +151,12 @@ run_claude_dev() {
 
         # Other error - log and fail
         log_dev_failure "$phase" "$attempt" "$exit_code" "$output"
-        echo -e "${RED}  $phase failed with exit code $exit_code${NC}"
+        ts_echo "${RED}$phase failed with exit code $exit_code${NC}"
         return $exit_code
     done
 
     dev_log "ERROR" "$phase failed after $MAX_RETRIES attempts"
-    echo -e "${RED}  $phase failed after $MAX_RETRIES attempts${NC}"
+    ts_echo "${RED}$phase failed after $MAX_RETRIES attempts${NC}"
     return 1
 }
 
@@ -311,11 +317,11 @@ dev_init() {
     local idea_file="$1"
 
     if [[ ! -f "$idea_file" ]]; then
-        echo -e "${RED}Error: Idea file '$idea_file' not found${NC}"
+        ts_echo "${RED}Error: Idea file '$idea_file' not found${NC}"
         return 1
     fi
 
-    echo -e "${GREEN}Initializing project from $idea_file...${NC}"
+    ts_echo "${GREEN}Initializing project from $idea_file...${NC}"
 
     local idea_content=$(cat "$idea_file")
 
@@ -362,7 +368,7 @@ Brief description
 
     run_claude_dev "$init_prompt" "init"
 
-    echo -e "${GREEN}Project initialized! Run 'pauly dev' to start building.${NC}"
+    ts_echo "${GREEN}Project initialized! Run 'pauly dev' to start building.${NC}"
 }
 
 # Refresh tasks from notes
@@ -370,11 +376,11 @@ dev_refresh() {
     local notes_file="$1"
 
     if [[ ! -f "$notes_file" ]]; then
-        echo -e "${RED}Error: Notes file '$notes_file' not found${NC}"
+        ts_echo "${RED}Error: Notes file '$notes_file' not found${NC}"
         return 1
     fi
 
-    echo -e "${GREEN}Adding tasks from $notes_file...${NC}"
+    ts_echo "${GREEN}Adding tasks from $notes_file...${NC}"
 
     local notes_content=$(cat "$notes_file")
     local context_content=""
@@ -408,7 +414,7 @@ $notes_content
 
     run_claude_dev "$refresh_prompt" "refresh"
 
-    echo -e "${GREEN}Tasks refreshed!${NC}"
+    ts_echo "${GREEN}Tasks refreshed!${NC}"
 }
 
 # Main development loop
@@ -419,12 +425,12 @@ dev_loop() {
     local iteration=1
     local start_time=$(date +%s)
 
-    echo -e "${GREEN}Starting development loop (max $max_iterations iterations)${NC}"
-    echo -e "${CYAN}Loop: PLAN -> EXECUTE -> REVIEW -> FIX${NC}"
+    ts_echo "${GREEN}Starting development loop (max $max_iterations iterations)${NC}"
+    ts_echo "${CYAN}Loop: PLAN -> EXECUTE -> REVIEW -> FIX${NC}"
     echo ""
 
     while [[ $iteration -le $max_iterations ]]; do
-        echo -e "${GREEN}=== Iteration $iteration/$max_iterations ===${NC}"
+        ts_echo "${GREEN}=== Iteration $iteration/$max_iterations ===${NC}"
 
         # Check if all tasks are done
         if [[ -f "$TASK_FILE" ]]; then
@@ -433,59 +439,59 @@ dev_loop() {
             unchecked="${unchecked//[^0-9]/}"  # Strip non-numeric chars
             [[ -z "$unchecked" ]] && unchecked=0
             if [[ "$unchecked" -eq 0 ]]; then
-                echo -e "${GREEN}All tasks complete!${NC}"
+                ts_echo "${GREEN}All tasks complete!${NC}"
                 send_dev_notification "complete" "$iteration" "$start_time"
                 break
             fi
-            echo -e "${BLUE}  Remaining tasks: $unchecked${NC}"
+            ts_echo "${BLUE}Remaining tasks: $unchecked${NC}"
         fi
 
         # Clean up any stale .task file from previous iterations
         rm -f "$TASK_STATE"
 
         # PLAN (fresh session - reads CONTEXT.md and TASKS.md)
-        echo -e "${CYAN}[PLAN]${NC}"
+        ts_echo "${CYAN}[PLAN]${NC}"
         run_claude_dev "$PLAN_PROMPT" "PLAN" "false" || {
-            echo -e "${RED}Plan failed, stopping${NC}"
+            ts_echo "${RED}Plan failed, stopping${NC}"
             send_dev_notification "failed" "$iteration" "$start_time" "Plan phase failed"
             break
         }
 
         # Check if .task was created and has required content
         if [[ ! -f "$TASK_STATE" ]]; then
-            echo -e "${YELLOW}No .task file created - may be done${NC}"
+            ts_echo "${YELLOW}No .task file created - may be done${NC}"
             send_dev_notification "complete" "$iteration" "$start_time"
             break
         fi
 
         # Validate .task has required fields
         if ! grep -q "^TASK:" "$TASK_STATE" 2>/dev/null; then
-            echo -e "${RED}.task file missing TASK: field - invalid plan${NC}"
+            ts_echo "${RED}.task file missing TASK: field - invalid plan${NC}"
             rm -f "$TASK_STATE"
             continue
         fi
 
         # EXECUTE (continues from PLAN - has full context)
-        echo -e "${CYAN}[EXECUTE]${NC}"
+        ts_echo "${CYAN}[EXECUTE]${NC}"
         run_claude_dev "$EXECUTE_PROMPT" "EXECUTE" "true" || {
-            echo -e "${RED}Execute failed${NC}"
+            ts_echo "${RED}Execute failed${NC}"
         }
 
         # REVIEW (continues from EXECUTE - knows what was implemented)
-        echo -e "${CYAN}[REVIEW]${NC}"
+        ts_echo "${CYAN}[REVIEW]${NC}"
         run_claude_dev "$REVIEW_PROMPT" "REVIEW" "true" || {
-            echo -e "${RED}Review failed${NC}"
+            ts_echo "${RED}Review failed${NC}"
         }
 
         # Check if review passed
         if grep -q "REVIEW_RESULT: PASS" "$TASK_STATE" 2>/dev/null; then
-            echo -e "${GREEN}  Review passed!${NC}"
+            ts_echo "${GREEN}Review passed!${NC}"
             rm -f "$TASK_STATE"
         else
             # FIX (continues from REVIEW - knows what issues were found)
-            echo -e "${CYAN}[FIX]${NC}"
+            ts_echo "${CYAN}[FIX]${NC}"
             run_claude_dev "$FIX_PROMPT" "FIX" "true" || {
-                echo -e "${RED}Fix failed${NC}"
+                ts_echo "${RED}Fix failed${NC}"
             }
             rm -f "$TASK_STATE"
         fi
@@ -493,7 +499,7 @@ dev_loop() {
         # Commit and push changes after each iteration
         if command -v git &> /dev/null && [[ -d .git ]]; then
             if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
-                echo -e "${BLUE}  Committing and pushing changes...${NC}"
+                ts_echo "${BLUE}Committing and pushing changes...${NC}"
                 git add -A
                 git commit -m "feat: iteration $iteration - automated development" 2>/dev/null || true
                 git push 2>/dev/null || git push -u origin "$(git branch --show-current)" 2>/dev/null || true
@@ -507,7 +513,7 @@ dev_loop() {
 
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
-    echo -e "${GREEN}Development loop complete after $((iteration-1)) iterations (${duration}s)${NC}"
+    ts_echo "${GREEN}Development loop complete after $((iteration-1)) iterations (${duration}s)${NC}"
 }
 
 # Isolated task mode
@@ -524,13 +530,13 @@ dev_task() {
     fi
 
     if [[ -z "$task_desc" ]]; then
-        echo -e "${RED}Error: No task description provided${NC}"
+        ts_echo "${RED}Error: No task description provided${NC}"
         echo "Usage: pauly dev task \"description\" or pauly dev task -f file.md"
         return 1
     fi
 
-    echo -e "${GREEN}Starting isolated task mode${NC}"
-    echo -e "${BLUE}Task: ${task_desc:0:80}...${NC}"
+    ts_echo "${GREEN}Starting isolated task mode${NC}"
+    ts_echo "${BLUE}Task: ${task_desc:0:80}...${NC}"
 
     # Create task directory
     local task_id=$(date +%s)
@@ -542,7 +548,7 @@ dev_task() {
     if command -v git &> /dev/null && [[ -d .git ]]; then
         branch="${branch_name:-task-$task_id}"
         git checkout -b "$branch" 2>/dev/null || git checkout "$branch" 2>/dev/null || true
-        echo -e "${BLUE}  Working on branch: $branch${NC}"
+        ts_echo "${BLUE}Working on branch: $branch${NC}"
     fi
 
     # Write task state
@@ -552,7 +558,7 @@ dev_task() {
     local iter=1
     local completed=false
     while [[ $iter -le $max_iter ]]; do
-        echo -e "${CYAN}[Task iteration $iter/$max_iter]${NC}"
+        ts_echo "${CYAN}[Task iteration $iter/$max_iter]${NC}"
 
         local task_prompt="You are working on a single isolated task.
 
@@ -566,13 +572,13 @@ If you encounter blockers, document them and say 'TASK BLOCKED: [reason]'."
         local output=$(run_claude_dev "$task_prompt" "task-$iter")
 
         if echo "$output" | grep -qi "TASK COMPLETE"; then
-            echo -e "${GREEN}Task completed!${NC}"
+            ts_echo "${GREEN}Task completed!${NC}"
             completed=true
 
             # Always commit and push changes if git available
             if command -v git &> /dev/null && [[ -d .git ]]; then
                 if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
-                    echo -e "${BLUE}Committing and pushing changes...${NC}"
+                    ts_echo "${BLUE}Committing and pushing changes...${NC}"
                     git add -A
                     git commit -m "feat: ${task_desc:0:50}" 2>/dev/null || true
                     if [[ -n "$branch" ]]; then
@@ -585,7 +591,7 @@ If you encounter blockers, document them and say 'TASK BLOCKED: [reason]'."
 
             # Create PR if gh available and not disabled
             if [[ "$no_pr" != "true" ]] && command -v gh &> /dev/null && [[ -n "$branch" ]]; then
-                echo -e "${BLUE}Creating PR...${NC}"
+                ts_echo "${BLUE}Creating PR...${NC}"
                 gh pr create --title "${task_desc:0:72}" --body "Automated task completion by Pauly
 
 ## Task
@@ -598,7 +604,7 @@ Generated by \`pauly dev task\`" 2>/dev/null || true
         fi
 
         if echo "$output" | grep -qi "TASK BLOCKED"; then
-            echo -e "${RED}Task blocked${NC}"
+            ts_echo "${RED}Task blocked${NC}"
             echo "$output" | grep -i "TASK BLOCKED" > "$task_dir/blocked.txt"
             break
         fi
@@ -606,7 +612,7 @@ Generated by \`pauly dev task\`" 2>/dev/null || true
         ((iter++))
     done
 
-    echo -e "${GREEN}Task mode complete${NC}"
+    ts_echo "${GREEN}Task mode complete${NC}"
     [[ "$completed" == "true" ]]
 }
 
@@ -660,7 +666,7 @@ Check logs at: $DEV_LOG_DIR/"
 
 # Show dev status
 dev_status() {
-    echo -e "${BOLD}Development Status${NC}"
+    ts_echo "${BOLD}Development Status${NC}"
     echo ""
 
     # Check for TASKS.md
@@ -669,32 +675,32 @@ dev_status() {
         local completed=$(grep -c '^\s*- \[x\]' "$TASK_FILE" 2>/dev/null || echo "0")
         local remaining=$((total - completed))
 
-        echo -e "${CYAN}Tasks:${NC}"
+        ts_echo "${CYAN}Tasks:${NC}"
         echo "  Total: $total"
         echo "  Completed: $completed"
         echo "  Remaining: $remaining"
         echo ""
 
         if [[ $remaining -gt 0 ]]; then
-            echo -e "${CYAN}Next tasks:${NC}"
+            ts_echo "${CYAN}Next tasks:${NC}"
             grep '^\s*- \[ \]' "$TASK_FILE" 2>/dev/null | head -5 | while read -r line; do
                 echo "  $line"
             done
             echo ""
         fi
     else
-        echo -e "${YELLOW}No TASKS.md found. Run 'pauly dev init <idea.md>' to start.${NC}"
+        ts_echo "${YELLOW}No TASKS.md found. Run 'pauly dev init <idea.md>' to start.${NC}"
     fi
 
     # Check for context
     if [[ -f "$CONTEXT_FILE" ]]; then
-        echo -e "${GREEN}CONTEXT.md exists${NC}"
+        ts_echo "${GREEN}CONTEXT.md exists${NC}"
     fi
 
     # Check for active task
     if [[ -f "$TASK_STATE" ]]; then
         echo ""
-        echo -e "${YELLOW}Active task in progress:${NC}"
+        ts_echo "${YELLOW}Active task in progress:${NC}"
         head -3 "$TASK_STATE"
     fi
 
@@ -703,7 +709,7 @@ dev_status() {
         local latest_log=$(ls -t "$DEV_LOG_DIR"/*.log 2>/dev/null | head -1)
         if [[ -n "$latest_log" ]]; then
             echo ""
-            echo -e "${CYAN}Recent activity:${NC}"
+            ts_echo "${CYAN}Recent activity:${NC}"
             tail -5 "$latest_log" 2>/dev/null
         fi
     fi
