@@ -7,6 +7,7 @@ import { getConfigValue } from "./lib/config.js";
 import clisRouter from "./routes/clis.js";
 import projectsRouter from "./routes/projects.js";
 import paulyRouter from "./routes/pauly.js";
+import railwayRouter from "./routes/railway.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +28,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/clis", clisRouter);
 app.use("/api/projects", projectsRouter);
 app.use("/api/pauly", paulyRouter);
+app.use("/api/railway", railwayRouter);
 
 // Serve static frontend files
 const clientDistPath = path.join(__dirname, "../../client/dist");
