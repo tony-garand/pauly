@@ -34,6 +34,9 @@ import {
   Terminal,
   ChevronDown,
   ChevronUp,
+  Train,
+  Rocket,
+  Link2,
 } from "lucide-react";
 import {
   fetchProjectDetail,
@@ -45,8 +48,12 @@ import {
   getIssueJobStatus,
   getDevJobStatus,
   clearDevLog,
+  linkProjectToRailway,
+  deployToRailway,
+  fetchRailwayStatus,
   type ProjectDetail as ProjectDetailType,
   type DevJobStatus,
+  type RailwayStatus,
 } from "@/lib/api";
 
 export function ProjectDetail() {
@@ -64,6 +71,9 @@ export function ProjectDetail() {
   const [deleting, setDeleting] = useState(false);
   const [devStatus, setDevStatus] = useState<DevJobStatus | null>(null);
   const [showDevLog, setShowDevLog] = useState(false);
+  const [railwayStatus, setRailwayStatus] = useState<RailwayStatus | null>(null);
+  const [linkingToRailway, setLinkingToRailway] = useState(false);
+  const [deployingToRailway, setDeployingToRailway] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!name) return;
@@ -82,6 +92,13 @@ export function ProjectDetail() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Load Railway status
+  useEffect(() => {
+    fetchRailwayStatus()
+      .then(setRailwayStatus)
+      .catch(() => setRailwayStatus(null));
+  }, []);
 
   // Poll dev status
   const loadDevStatus = useCallback(async () => {
@@ -109,6 +126,35 @@ export function ProjectDetail() {
       setShowDevLog(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to clear log");
+    }
+  };
+
+  const handleLinkToRailway = async () => {
+    if (!project) return;
+    setLinkingToRailway(true);
+    setError(null);
+    try {
+      await linkProjectToRailway(project.path);
+      // Refresh Railway status
+      const status = await fetchRailwayStatus();
+      setRailwayStatus(status);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to link to Railway");
+    } finally {
+      setLinkingToRailway(false);
+    }
+  };
+
+  const handleDeployToRailway = async () => {
+    if (!project) return;
+    setDeployingToRailway(true);
+    setError(null);
+    try {
+      await deployToRailway(project.name, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to deploy to Railway");
+    } finally {
+      setDeployingToRailway(false);
     }
   };
 
@@ -342,6 +388,63 @@ export function ProjectDetail() {
                   <span className="font-medium">{project.gitStatus.untracked}</span> untracked
                 </span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Railway Quick Actions */}
+      {railwayStatus?.authenticated && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Train className="h-4 w-4" />
+              Railway
+            </CardTitle>
+            <CardDescription>
+              Deploy this project to Railway
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLinkToRailway}
+                disabled={linkingToRailway}
+                className="gap-1"
+              >
+                {linkingToRailway ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Link2 className="h-3 w-3" />
+                )}
+                Link Project
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleDeployToRailway}
+                disabled={deployingToRailway}
+                className="gap-1"
+              >
+                {deployingToRailway ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Rocket className="h-3 w-3" />
+                )}
+                Deploy
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+              >
+                <Link to="/railway" className="gap-1">
+                  <ExternalLink className="h-3 w-3" />
+                  Dashboard
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
