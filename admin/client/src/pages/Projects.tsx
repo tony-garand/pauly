@@ -7,6 +7,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loading } from "@/components/ui/loading";
 import { ErrorDisplay } from "@/components/ui/error";
+import { ImportRepoDialog } from "@/components/ImportRepoDialog";
 import {
   FolderGit2,
   GitBranch,
@@ -50,11 +51,14 @@ export function Projects() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Projects</h1>
-        <p className="text-muted-foreground">
-          Your development projects in ~/Projects
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Projects</h1>
+          <p className="text-muted-foreground">
+            Your development projects in ~/Projects
+          </p>
+        </div>
+        <ImportRepoDialog onSuccess={loadData} />
       </div>
 
       {/* Summary Card */}
