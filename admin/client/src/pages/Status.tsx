@@ -25,12 +25,15 @@ import {
   X,
   Trash2,
   Plus,
+  Skull,
+  Loader2,
 } from "lucide-react";
 import {
   fetchPaulyStatus,
   fetchPaulyConfig,
   updatePaulyConfig,
   deletePaulyConfig,
+  killAllProcesses,
   type PaulyJob,
 } from "@/lib/api";
 
@@ -46,6 +49,8 @@ export function Status() {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
+  const [killing, setKilling] = useState(false);
+  const [killResult, setKillResult] = useState<{ killed: number } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -111,6 +116,25 @@ export function Status() {
     }
   };
 
+  const handleKillAll = async () => {
+    const confirmed = window.confirm(
+      "⚠️ KILLSWITCH\n\nThis will terminate ALL running Claude and Pauly dev processes.\n\nAre you sure?"
+    );
+    if (!confirmed) return;
+
+    setKilling(true);
+    setKillResult(null);
+    try {
+      const result = await killAllProcesses();
+      setKillResult({ killed: result.killed });
+      setTimeout(() => setKillResult(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to kill processes");
+    } finally {
+      setKilling(false);
+    }
+  };
+
   if (loading) {
     return <Loading message="Loading Pauly status..." />;
   }
@@ -141,6 +165,38 @@ export function Status() {
           <Badge variant="default" className="bg-green-500 hover:bg-green-600">
             Active
           </Badge>
+        </CardContent>
+      </Card>
+
+      {/* Killswitch Card */}
+      <Card className="border-destructive/50">
+        <CardContent className="flex items-center gap-4 py-4">
+          <Skull className="h-8 w-8 text-destructive" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Emergency Killswitch</p>
+            <p className="text-muted-foreground text-sm">
+              Stop all running Claude and dev processes
+            </p>
+          </div>
+          {killResult && (
+            <Badge variant="outline" className="mr-2">
+              Killed {killResult.killed} process{killResult.killed !== 1 ? "es" : ""}
+            </Badge>
+          )}
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleKillAll}
+            disabled={killing}
+            className="gap-2"
+          >
+            {killing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Skull className="h-4 w-4" />
+            )}
+            {killing ? "Stopping..." : "Kill All"}
+          </Button>
         </CardContent>
       </Card>
 

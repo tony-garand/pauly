@@ -40,6 +40,11 @@ import {
   Play,
   Square,
   RotateCcw,
+  Pencil,
+  Eye,
+  Save,
+  X,
+  Archive,
 } from "lucide-react";
 import {
   fetchProjectDetail,
@@ -58,6 +63,9 @@ import {
   deployToRailway,
   fetchRailwayStatus,
   fetchRailwayProjects,
+  updateContextMd,
+  deleteContextMd,
+  archiveAllTasks,
   type ProjectDetail as ProjectDetailType,
   type DevJobStatus,
   type RailwayStatus,
@@ -86,6 +94,10 @@ export function ProjectDetail() {
   const [selectedRailwayService, setSelectedRailwayService] = useState<string>("");
   const [linkingToRailway, setLinkingToRailway] = useState(false);
   const [deployingToRailway, setDeployingToRailway] = useState(false);
+  const [showContext, setShowContext] = useState(false);
+  const [editingContext, setEditingContext] = useState(false);
+  const [contextContent, setContextContent] = useState("");
+  const [savingContext, setSavingContext] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!name) return;
@@ -212,6 +224,50 @@ export function ProjectDetail() {
     }
   };
 
+  const handleEditContext = () => {
+    setContextContent(project?.contextMdContent || "# Context\n\nDescribe your project here...");
+    setEditingContext(true);
+    setShowContext(true);
+  };
+
+  const handleSaveContext = async () => {
+    if (!name) return;
+    setSavingContext(true);
+    setError(null);
+    try {
+      await updateContextMd(name, contextContent);
+      await loadData();
+      setEditingContext(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save CONTEXT.md");
+    } finally {
+      setSavingContext(false);
+    }
+  };
+
+  const handleDeleteContext = async () => {
+    if (!name) return;
+    const confirmed = window.confirm("Are you sure you want to delete CONTEXT.md?");
+    if (!confirmed) return;
+
+    setError(null);
+    try {
+      await deleteContextMd(name);
+      await loadData();
+      setShowContext(false);
+      setEditingContext(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete CONTEXT.md");
+    }
+  };
+
+  const handleCancelEditContext = () => {
+    setEditingContext(false);
+    if (!project?.hasContextMd) {
+      setShowContext(false);
+    }
+  };
+
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !newTaskText.trim()) return;
@@ -238,12 +294,40 @@ export function ProjectDetail() {
   };
 
   const handleDeleteTask = async (index: number) => {
-    if (!name) return;
+    if (!name || !project) return;
     try {
       await deleteProjectTask(name, index);
-      await loadData();
+      // Update local state instead of reloading
+      setProject({
+        ...project,
+        tasks: project.tasks?.filter((_, i) => i !== index),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete task");
+    }
+  };
+
+  const handleArchiveAllTasks = async (skipConfirm = false) => {
+    if (!name || !project) return;
+    const taskCount = project.tasks?.length || 0;
+    if (taskCount === 0) return;
+
+    if (!skipConfirm) {
+      const confirmed = window.confirm(
+        `Archive all ${taskCount} tasks?\n\nTasks will be moved to TASKS-ARCHIVE.md.`
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      await archiveAllTasks(name);
+      // Clear tasks from local state
+      setProject({
+        ...project,
+        tasks: [],
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to archive tasks");
     }
   };
 
@@ -447,6 +531,115 @@ export function ProjectDetail() {
         </Card>
       )}
 
+      {/* CONTEXT.md Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              CONTEXT.md
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {project.hasContextMd && !editingContext && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowContext(!showContext)}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {showContext ? <ChevronUp className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    {showContext ? "Hide" : "View"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditContext}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </Button>
+                </>
+              )}
+              {!project.hasContextMd && !editingContext && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEditContext}
+                  className="h-7 text-xs gap-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  Create
+                </Button>
+              )}
+              {editingContext && (
+                <>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleSaveContext}
+                    disabled={savingContext}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {savingContext ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Save className="h-3 w-3" />
+                    )}
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEditContext}
+                    disabled={savingContext}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <X className="h-3 w-3" />
+                    Cancel
+                  </Button>
+                  {project.hasContextMd && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDeleteContext}
+                      disabled={savingContext}
+                      className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          <CardDescription>
+            {project.hasContextMd
+              ? "Project context and documentation for Claude"
+              : "Add context to help Claude understand your project"}
+          </CardDescription>
+        </CardHeader>
+        {(showContext || editingContext) && (
+          <CardContent>
+            {editingContext ? (
+              <textarea
+                value={contextContent}
+                onChange={(e) => setContextContent(e.target.value)}
+                disabled={savingContext}
+                rows={15}
+                className="w-full px-3 py-2 text-sm font-mono rounded-md border border-input bg-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y min-h-[200px]"
+                placeholder="# Context&#10;&#10;Describe your project here..."
+              />
+            ) : (
+              <pre className="p-3 bg-muted rounded-lg text-sm font-mono overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
+                {project.contextMdContent || "No content"}
+              </pre>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
       {/* Railway Quick Actions */}
       {railwayStatus?.authenticated && (
         <Card>
@@ -598,6 +791,17 @@ export function ProjectDetail() {
                   <p className="text-xs text-muted-foreground">complete</p>
                 </div>
               )}
+              {totalTasks > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleArchiveAllTasks(false)}
+                  className="gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <Archive className="h-4 w-4" />
+                  Clear All
+                </Button>
+              )}
               <Button
                 variant={showIssueForm ? "secondary" : "outline"}
                 size="sm"
@@ -616,6 +820,24 @@ export function ProjectDetail() {
                 className="h-full bg-primary transition-all"
                 style={{ width: `${percentage}%` }}
               />
+            </div>
+          )}
+          {/* Archive suggestion when 100% complete */}
+          {totalTasks > 0 && percentage === 100 && (
+            <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>All tasks complete! Archive to reduce context usage.</span>
+              </div>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => handleArchiveAllTasks(true)}
+                className="gap-1 bg-green-600 hover:bg-green-700"
+              >
+                <Archive className="h-3 w-3" />
+                Archive Now
+              </Button>
             </div>
           )}
           {/* Dev controls */}

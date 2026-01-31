@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType } from "express";
 import { getPaulyStatus, getSanitizedConfig, getLogContent, getAvailableLogs } from "../lib/pauly.js";
 import { updateConfigValue, deleteConfigValue } from "../lib/config.js";
+import { killAllClaudeProcesses } from "../lib/projects.js";
 
 const router: RouterType = Router();
 
@@ -63,6 +64,18 @@ router.get("/logs/:job", (req, res) => {
   }
 
   res.json({ log });
+});
+
+// Killswitch - stop all Claude processes
+router.post("/kill", (_req, res) => {
+  const result = killAllClaudeProcesses();
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true, killed: result.killed });
 });
 
 export default router;

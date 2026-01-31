@@ -79,6 +79,7 @@ cmd_help() {
     echo -e "  ${BOLD}autofix${NC}          Show auto-fix status"
     echo -e "  ${BOLD}autofix test${NC}     Test auto-fix with simulated failure"
     echo -e "  ${BOLD}autofix logs${NC}     View auto-fix logs"
+    echo -e "  ${BOLD}kill${NC}             Stop all running Claude/dev processes"
     echo -e "  ${BOLD}version${NC}          Show version"
     echo -e "  ${BOLD}help${NC}             Show this help message"
     echo ""
@@ -514,15 +515,19 @@ cmd_disable() {
         tasks|email)
             job="tasks"
             ;;
+        dev)
+            job="dev"
+            ;;
         all)
             cmd_disable "summary"
             cmd_disable "git"
             cmd_disable "research"
             cmd_disable "tasks"
+            cmd_disable "dev"
             return
             ;;
         "")
-            print_error "Please specify a job: summary, git, research, or all"
+            print_error "Please specify a job: summary, git, research, tasks, dev, or all"
             exit 1
             ;;
         *)
@@ -885,6 +890,63 @@ cmd_dev() {
     esac
 }
 
+cmd_kill() {
+    print_header
+    echo -e "${BOLD}${RED}KILLSWITCH${NC} - Stopping all Claude processes..."
+    echo ""
+
+    # Find all Claude CLI processes
+    local claude_pids=$(pgrep -f "claude" 2>/dev/null || true)
+
+    # Find all pauly dev processes
+    local dev_pids=$(pgrep -f "pauly dev" 2>/dev/null || true)
+
+    # Combine and deduplicate
+    local all_pids=$(echo -e "$claude_pids\n$dev_pids" | sort -u | grep -v "^$" || true)
+
+    if [ -z "$all_pids" ]; then
+        print_info "No Claude or Pauly dev processes running"
+        return 0
+    fi
+
+    local count=$(echo "$all_pids" | wc -l | tr -d ' ')
+    echo "Found $count process(es) to terminate:"
+    echo ""
+
+    # Show what we're killing
+    for pid in $all_pids; do
+        local cmd=$(ps -p "$pid" -o command= 2>/dev/null | head -c 80 || echo "unknown")
+        echo "  PID $pid: $cmd"
+    done
+    echo ""
+
+    # Kill them all
+    local killed=0
+    for pid in $all_pids; do
+        if kill -TERM "$pid" 2>/dev/null; then
+            ((killed++))
+        fi
+    done
+
+    # Wait a moment for graceful shutdown
+    sleep 1
+
+    # Force kill any remaining
+    for pid in $all_pids; do
+        if kill -0 "$pid" 2>/dev/null; then
+            kill -9 "$pid" 2>/dev/null && print_warning "Force killed PID $pid"
+        fi
+    done
+
+    print_success "Terminated $killed process(es)"
+
+    # Also clear any dev logs to reset state
+    echo ""
+    print_info "Clearing dev status logs..."
+    rm -f "$SCRIPT_DIR/logs/dev-"*.log 2>/dev/null || true
+    print_success "Dev logs cleared"
+}
+
 # ==========================================
 # Main
 # ==========================================
@@ -930,6 +992,9 @@ case "${1:-help}" in
         ;;
     autofix|auto-fix)
         cmd_autofix "$2"
+        ;;
+    kill|killswitch|stop-all)
+        cmd_kill
         ;;
     version|--version|-v)
         cmd_version
