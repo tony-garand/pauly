@@ -1,6 +1,23 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -45,12 +62,14 @@ import {
   Save,
   X,
   Archive,
+  GripVertical,
 } from "lucide-react";
 import {
   fetchProjectDetail,
   addProjectTask,
   toggleProjectTask,
   deleteProjectTask,
+  reorderProjectTasks,
   deleteProject,
   createProjectIssue,
   getIssueJobStatus,
@@ -72,8 +91,74 @@ import {
   type DevJobStatus,
   type RailwayStatus,
   type RailwayProject,
+  type TaskItem,
 } from "@/lib/api";
 import { showSuccess, showError } from "@/lib/toast";
+
+interface SortableTaskProps {
+  task: TaskItem;
+  index: number;
+  onToggle: (index: number) => void;
+  onDelete: (index: number) => void;
+}
+
+function SortableTask({ task, index, onToggle, onDelete }: SortableTaskProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `task-${index}` });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 py-2 px-2 -mx-2 rounded hover:bg-muted/50 group"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="shrink-0 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <button
+        onClick={() => onToggle(index)}
+        className="shrink-0"
+      >
+        {task.completed ? (
+          <CheckCircle2 className="h-5 w-5 text-green-500 hover:text-green-600" />
+        ) : (
+          <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
+        )}
+      </button>
+      <span
+        className={`flex-1 ${
+          task.completed ? "text-muted-foreground line-through" : ""
+        }`}
+      >
+        {task.text}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onDelete(index)}
+        className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </li>
+  );
+}
 
 export function ProjectDetail() {
   const { name } = useParams<{ name: string }>();
@@ -105,6 +190,40 @@ export function ProjectDetail() {
   const [editingTodo, setEditingTodo] = useState(false);
   const [todoContent, setTodoContent] = useState("");
   const [savingTodo, setSavingTodo] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id || !name || !project?.tasks) {
+      return;
+    }
+
+    const oldIndex = parseInt(String(active.id).replace("task-", ""));
+    const newIndex = parseInt(String(over.id).replace("task-", ""));
+
+    // Optimistically update local state
+    const newTasks = arrayMove(project.tasks, oldIndex, newIndex);
+    setProject({ ...project, tasks: newTasks });
+
+    try {
+      await reorderProjectTasks(name, oldIndex, newIndex);
+    } catch (err) {
+      // Revert on failure
+      setError(err instanceof Error ? err.message : "Failed to reorder tasks");
+      await loadData();
+    }
+  };
 
   const loadData = useCallback(async () => {
     if (!name) return;
@@ -1224,40 +1343,28 @@ export function ProjectDetail() {
 
           {/* Task list */}
           {project.tasks && project.tasks.length > 0 ? (
-            <ul className="space-y-1">
-              {project.tasks.map((task, index) => (
-                <li
-                  key={index}
-                  className="flex items-center gap-3 py-2 px-2 -mx-2 rounded hover:bg-muted/50 group"
-                >
-                  <button
-                    onClick={() => handleToggleTask(index)}
-                    className="shrink-0"
-                  >
-                    {task.completed ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500 hover:text-green-600" />
-                    ) : (
-                      <Circle className="h-5 w-5 text-muted-foreground hover:text-primary" />
-                    )}
-                  </button>
-                  <span
-                    className={`flex-1 ${
-                      task.completed ? "text-muted-foreground line-through" : ""
-                    }`}
-                  >
-                    {task.text}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteTask(index)}
-                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={project.tasks.map((_, index) => `task-${index}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                <ul className="space-y-1">
+                  {project.tasks.map((task, index) => (
+                    <SortableTask
+                      key={`task-${index}`}
+                      task={task}
+                      index={index}
+                      onToggle={handleToggleTask}
+                      onDelete={handleDeleteTask}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
               No tasks yet. Add one above to get started.

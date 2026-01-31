@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from "express";
-import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo, startDevProcess, stopDevProcess, restartDevProcess, getContextMd, updateContextMd, deleteContextMd, archiveAllTasks, getTodoMd, updateTodoMd, deleteTodoMd } from "../lib/projects.js";
+import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, reorderTasks, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo, startDevProcess, stopDevProcess, restartDevProcess, getContextMd, updateContextMd, deleteContextMd, archiveAllTasks, getTodoMd, updateTodoMd, deleteTodoMd } from "../lib/projects.js";
 
 const router: RouterType = Router();
 
@@ -106,6 +106,30 @@ router.delete("/:name/tasks/:index", (req, res) => {
   const success = deleteTask(name, taskIndex);
   if (!success) {
     res.status(404).json({ error: "Task not found" });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Reorder tasks
+router.post("/:name/tasks/reorder", (req, res) => {
+  const { name } = req.params;
+  const { fromIndex, toIndex } = req.body;
+
+  if (typeof fromIndex !== "number" || typeof toIndex !== "number") {
+    res.status(400).json({ error: "fromIndex and toIndex are required" });
+    return;
+  }
+
+  if (fromIndex < 0 || toIndex < 0) {
+    res.status(400).json({ error: "Invalid task indices" });
+    return;
+  }
+
+  const success = reorderTasks(name, fromIndex, toIndex);
+  if (!success) {
+    res.status(404).json({ error: "Task not found or reorder failed" });
     return;
   }
 

@@ -433,6 +433,50 @@ export function deleteTask(projectName: string, taskIndex: number): boolean {
   }
 }
 
+export function reorderTasks(projectName: string, fromIndex: number, toIndex: number): boolean {
+  const projectsDir = getProjectsDir();
+  const tasksPath = join(projectsDir, projectName, "TASKS.md");
+
+  if (!existsSync(tasksPath)) {
+    return false;
+  }
+
+  try {
+    const content = readFileSync(tasksPath, "utf-8");
+    const lines = content.split("\n");
+
+    // Find all task lines and their indices
+    const taskIndices: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].match(/^\s*-\s*\[[\sx]\]/i)) {
+        taskIndices.push(i);
+      }
+    }
+
+    // Validate indices
+    if (fromIndex < 0 || fromIndex >= taskIndices.length ||
+        toIndex < 0 || toIndex >= taskIndices.length) {
+      return false;
+    }
+
+    // Get the actual line indices
+    const fromLineIndex = taskIndices[fromIndex];
+    const toLineIndex = taskIndices[toIndex];
+
+    // Extract the task line we're moving
+    const [movedLine] = lines.splice(fromLineIndex, 1);
+
+    // Calculate new insertion point (account for the removed line)
+    const adjustedToIndex = toLineIndex > fromLineIndex ? toLineIndex - 1 : toLineIndex;
+    lines.splice(adjustedToIndex, 0, movedLine);
+
+    writeFileSync(tasksPath, lines.join("\n"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function archiveAllTasks(projectName: string): { success: boolean; archived: number; error?: string } {
   const projectsDir = getProjectsDir();
   const projectPath = join(projectsDir, projectName);
@@ -1145,8 +1189,16 @@ Output format (no other text):
         content = "# Tasks\n\n";
       }
 
-      // Add section header for the issue
-      const issueSection = `\n## ${title}\n\n${taskLines.join("\n")}\n`;
+      // Add section header for the issue with context
+      let issueSection = `\n## ${title}\n\n`;
+
+      // Include issue body as context (blockquote format)
+      if (body.trim()) {
+        const contextLines = body.trim().split("\n").map(line => `> ${line}`).join("\n");
+        issueSection += `${contextLines}\n\n`;
+      }
+
+      issueSection += `${taskLines.join("\n")}\n`;
 
       if (content.endsWith("\n")) {
         content += issueSection;

@@ -255,6 +255,19 @@ export async function archiveAllTasks(projectName: string) {
   return response.json() as Promise<{ success: boolean; archived: number }>;
 }
 
+export async function reorderProjectTasks(projectName: string, fromIndex: number, toIndex: number) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/tasks/reorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ fromIndex, toIndex }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function createProjectIssue(projectName: string, title: string, body: string) {
   const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/issues`, {
     method: "POST",
