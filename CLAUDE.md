@@ -18,6 +18,31 @@ Pauly can build entire projects from idea files using a PLAN -> EXECUTE -> REVIE
 - `pauly dev [n]` - Run n iterations of the dev loop
 - `pauly dev task "desc"` - Run isolated single-task mode
 
+### TASKS.md vs TODO.md
+
+Projects use two different files for tracking work:
+
+**TASKS.md** - Development tasks that CAN be automated by AI:
+- Code changes, feature implementation, bug fixes
+- Writing tests, updating configs, refactoring
+- Database migrations, API integrations
+- Documentation updates within the codebase
+
+**TODO.md** - Non-development tasks requiring human action:
+- Sign up for external services / get credentials
+- Get API keys or access tokens
+- Manual testing or stakeholder reviews
+- Physical world actions (meetings, purchases)
+- External dependencies (waiting for others)
+- Decisions requiring human input
+
+When processing tasks, Pauly will:
+1. Automatically move non-actionable items from TASKS.md to TODO.md
+2. Notify via GitHub issue comment, email, or admin UI toast when TODO.md is updated
+3. Focus development time only on tasks that can be completed via code
+
+The admin dashboard provides CRUD operations for TODO.md files in each project.
+
 ## Directory Structure
 
 ```

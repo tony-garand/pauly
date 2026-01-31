@@ -280,12 +280,26 @@ Execute this task and provide a clear summary of the results." 2>&1)
             reply_subject="Re: $subject - Completed"
         fi
 
+        # Check if TODO.md was created/modified
+        local todo_info=""
+        if [[ -n "$DEV_PROJECT_DIR" ]] && [[ -f "$DEV_PROJECT_DIR/TODO.md" ]]; then
+            todo_info="
+
+---
+📝 TODO.md Updated:
+
+$(head -20 "$DEV_PROJECT_DIR/TODO.md")
+
+(These items require manual action and cannot be automated.)
+"
+        fi
+
         # Send reply
         local reply_body="Task completed.
 
 Results:
 $result
-
+$todo_info
 --
 Pauly AI Assistant"
 

@@ -190,6 +190,19 @@ If you don't create this file, the automation will fail.
 Before planning, CONFIRM the task line starts with '- [ ]' (space between brackets).
 If it starts with '- [x]', it's ALREADY DONE - find the next unchecked task.
 
+## Non-Actionable Tasks → TODO.md
+If the task is NOT something that can be done via code/development, move it to TODO.md:
+- Manual actions (e.g., "sign up for service", "email someone")
+- External dependencies (e.g., "wait for API access", "get client approval")
+- Human decisions (e.g., "decide on pricing", "review with team")
+- Physical world actions (e.g., "purchase hardware", "schedule meeting")
+
+To move a non-actionable task:
+1. Remove it from TASKS.md (change '- [ ] task' to nothing)
+2. Add it to TODO.md (create file if it doesn't exist)
+3. Do NOT create a .task file for non-actionable tasks
+4. Move to the next task in TASKS.md
+
 ## .task file format (MUST create this file):
 
 TASK: [exact task text from TASKS.md]
@@ -329,7 +342,8 @@ dev_init() {
 
 Read this idea/requirements file and create:
 1. CONTEXT.md - Project overview, tech stack, commands (test, build, run)
-2. TASKS.md - Checklist of tasks to build the project, ordered by dependency
+2. TASKS.md - Checklist of DEVELOPMENT tasks to build the project
+3. TODO.md - (if needed) Non-development tasks requiring human action
 
 ## Idea File Content:
 $idea_content
@@ -349,7 +363,7 @@ Brief description
 ## Architecture
 [Key design decisions]
 
-## TASKS.md Format:
+## TASKS.md Format (DEVELOPMENT TASKS ONLY):
 # Tasks
 
 ## Phase 1: Setup
@@ -360,11 +374,35 @@ Brief description
 
 (continue phases as needed)
 
+## TODO.md Format (NON-DEVELOPMENT TASKS):
+# TODO
+
+## Setup (Manual)
+- [ ] Sign up for [service]
+- [ ] Get API key for [service]
+
+## External Dependencies
+- [ ] Wait for [external thing]
+
+(only create if there are non-dev tasks)
+
+## Task Classification:
+**TASKS.md** - Development tasks that CAN be automated by AI:
+- Code changes, feature implementation, bug fixes
+- Writing tests, updating configs, refactoring
+- Database migrations, API integrations
+
+**TODO.md** - Tasks that CANNOT be done by AI (require human):
+- Sign up for external services / get credentials
+- Manual testing, stakeholder reviews
+- Physical world actions, external dependencies
+
 ## Rules:
 - Tasks should be small, focused
 - Each task has clear outcome to verify
 - Order by dependencies
-- Include setup tasks first"
+- Include setup tasks first
+- Non-development tasks go to TODO.md, not TASKS.md"
 
     run_claude_dev "$init_prompt" "init"
 
@@ -403,12 +441,29 @@ $notes_content
 ## Your Job:
 1. Read the new notes
 2. Convert them into actionable tasks
-3. Add them to TASKS.md in the appropriate phase
-4. Update CONTEXT.md if there are new architectural decisions
+3. Add DEVELOPMENT tasks to TASKS.md in the appropriate phase
+4. Add NON-DEVELOPMENT tasks to TODO.md (create if needed)
+5. Update CONTEXT.md if there are new architectural decisions
+
+## Task Classification:
+**TASKS.md** - Development tasks that can be automated:
+- Code changes, feature implementation, bug fixes
+- Writing tests, updating configs, refactoring
+- Database migrations, API integrations
+- Documentation updates within the codebase
+
+**TODO.md** - Non-development tasks requiring human action:
+- Sign up for external services
+- Get API keys or credentials
+- Manual testing/review by humans
+- Decisions requiring stakeholder input
+- Physical world actions (meetings, purchases)
+- External dependencies (waiting for others)
 
 ## Rules:
-- Keep existing completed tasks
-- Add new tasks with '- [ ]' format
+- Keep existing completed tasks in TASKS.md
+- Add development tasks with '- [ ]' format to TASKS.md
+- Add non-development tasks to TODO.md
 - Each task needs clear outcome
 - Maintain task ordering by dependency"
 

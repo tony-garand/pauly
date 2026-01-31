@@ -745,13 +745,32 @@ $(tail -50 <<< "$loop_result")
 
     log "Task completed (${#result} chars of output)"
 
+    # Check if TODO.md was created/modified and notify
+    local todo_file="$work_dir/TODO.md"
+    local todo_notification=""
+    if [[ -f "$todo_file" ]]; then
+        local todo_preview=$(head -20 "$todo_file" | sed 's/```/\`\`\`/g')
+        todo_notification="
+---
+
+📝 **TODO.md Updated**
+
+Non-development tasks have been added to \`TODO.md\`:
+
+\`\`\`markdown
+$todo_preview
+\`\`\`
+
+_These items require manual action and cannot be automated._"
+    fi
+
     # Post results as comment
     local result_comment="## ✅ Completed
 
 \`\`\`
 $(tail -100 <<< "$result")
 \`\`\`
-
+$todo_notification
 ---
 🤖 *Completed by Pauly*"
 

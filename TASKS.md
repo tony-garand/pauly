@@ -25,10 +25,10 @@ Add TODO.md CRUD functionality to admin UI with notifications when files are upd
 - [x] Update `getProjectDetail` in `admin/server/src/lib/projects.ts` to include `hasTodoMd` and `todoMdContent`
 
 ### Phase 5: Notification on Issue/Email Creation
-- [ ] When GitHub issue creates/updates TODO.md, comment on the issue
-- [ ] When email task creates/updates TODO.md, send email notification
+- [x] When GitHub issue creates/updates TODO.md, comment on the issue
+- [x] When email task creates/updates TODO.md, send email notification
 - [x] When admin UI creates/updates TODO.md, show sonner toast
 
 ### Phase 6: Task Actionability
-- [ ] Update dev scripts to move non-actionable tasks to TODO.md
-- [ ] Document the TODO.md vs TASKS.md distinction
+- [x] Update dev scripts to move non-actionable tasks to TODO.md
+- [x] Document the TODO.md vs TASKS.md distinction (in CLAUDE.md)
