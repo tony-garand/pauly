@@ -65,9 +65,32 @@ Config lives at `~/.config/pauly/config`:
 ### GitHub Issues (Primary)
 Create issues in the configured repo with:
 - Label: `pauly` (required)
-- Label: `project:name` (optional - targets specific project in ~/Projects)
+- Label: `project:name` or `product:name` (optional - targets specific project in ~/Projects)
 - Title: Task description or dev command
 - Body: Details/context
+
+#### Project/Product Label Behavior
+
+**IMPORTANT:** Without an explicit `project:` or `product:` label:
+- Pauly will NOT create new directories in ~/Projects
+- Tasks about Pauly itself (title contains "pauly" or body references `~/.pauly`) will work in `~/.pauly`
+- Tasks may work in existing projects if one can be inferred from the title
+- Otherwise, the task will fail with an error asking for a label
+
+This prevents accidental project creation and ensures task isolation.
+
+#### Issue Isolation
+Each GitHub issue is processed in isolation:
+- Sessions are cleared between different issues
+- Context from one issue cannot contaminate another
+- Each issue gets its own working directory based on its labels
+
+#### One Task Per Project
+Only one task can run per project at a time:
+- If issue #1 is working on `project:fartly`, issue #2 targeting the same project will wait
+- The waiting issue gets a comment explaining it's queued
+- Locks auto-expire after 1 hour (for crashed processes)
+- This prevents conflicting changes to the same codebase
 
 ### Email (Optional)
 Send any email from an allowed sender (no subject prefix required)

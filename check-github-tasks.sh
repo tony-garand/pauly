@@ -16,10 +16,41 @@ github_tasks_configured() {
     [ -n "$GITHUB_TASKS_REPO" ] && ensure_gh
 }
 
-# Extract project from labels (looks for project:name pattern)
+# Extract project from labels (looks for project:name or product:name pattern)
 get_project_from_labels() {
     local labels="$1"
-    echo "$labels" | tr ',' '\n' | grep "^project:" | sed 's/^project://' | head -1
+    # Check for project: first, then product: (both are valid)
+    local project=$(echo "$labels" | tr ',' '\n' | grep "^project:" | sed 's/^project://' | head -1)
+    if [ -z "$project" ]; then
+        project=$(echo "$labels" | tr ',' '\n' | grep "^product:" | sed 's/^product://' | head -1)
+    fi
+    echo "$project"
+}
+
+# Check if this is a Pauly self-referential task (about Pauly itself, not a project)
+is_pauly_task() {
+    local title="$1"
+    local body="$2"
+    local labels="$3"
+
+    # If it has a project/product label, it's NOT a Pauly task
+    local has_project=$(echo "$labels" | tr ',' '\n' | grep -E "^(project|product):" | head -1)
+    if [ -n "$has_project" ]; then
+        return 1
+    fi
+
+    # Check if title or body mentions ~/.pauly or pauly-related work
+    local title_lower=$(echo "$title" | tr '[:upper:]' '[:lower:]')
+    if [[ "$title_lower" == "pauly" ]] || [[ "$title_lower" =~ ^pauly[[:space:]] ]] || [[ "$title_lower" =~ pauly$ ]]; then
+        return 0
+    fi
+
+    # Check body for ~/.pauly references
+    if echo "$body" | grep -qE '~/.pauly|\.pauly/|pauly (cli|script|config|admin|dev|task)'; then
+        return 0
+    fi
+
+    return 1
 }
 
 # Find existing directory with case-insensitive matching
@@ -44,10 +75,12 @@ find_project_dir_case_insensitive() {
 }
 
 # Get the working directory for a task (creates if needed for new projects)
+# IMPORTANT: Only creates directories in ~/Projects if there's an explicit project/product label
 get_task_directory() {
     local project="$1"
     local title="$2"
     local create_if_missing="${3:-false}"
+    local has_explicit_label="${4:-false}"  # Whether project came from explicit label
     local projects_base="${PROJECTS_DIR:-$HOME/Projects}"
 
     if [ -n "$project" ]; then
@@ -56,12 +89,17 @@ get_task_directory() {
         if [ -n "$found_path" ]; then
             echo "$found_path"
             return 0
-        elif [ "$create_if_missing" = "true" ]; then
+        elif [ "$create_if_missing" = "true" ] && [ "$has_explicit_label" = "true" ]; then
+            # Only create new project directory if there was an EXPLICIT project/product label
             local project_path="$projects_base/$project"
             echo "Creating new project directory: $project_path" >&2
             mkdir -p "$project_path"
             echo "$project_path"
             return 0
+        elif [ "$create_if_missing" = "true" ]; then
+            # No explicit label - refuse to create in ~/Projects
+            echo "ERROR: No project/product label and project '$project' doesn't exist. Not creating in ~/Projects." >&2
+            return 1
         else
             echo "Project directory not found: $projects_base/$project" >&2
             return 1
@@ -70,7 +108,7 @@ get_task_directory() {
         echo "$DEV_PROJECT_DIR"
         return 0
     else
-        # Try to infer project name from title (e.g., "shelfmark.app" -> shelfmark.app)
+        # No explicit project - try to find an EXISTING project only (never create)
         # Look for patterns like "word.word" or "word-word" that look like project names
         local inferred_project=$(echo "$title" | grep -oE '[a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]+' | head -1)
         if [ -z "$inferred_project" ]; then
@@ -78,23 +116,18 @@ get_task_directory() {
         fi
 
         if [ -n "$inferred_project" ]; then
-            # Try case-insensitive match for inferred project
+            # Try case-insensitive match for inferred project (EXISTING ONLY)
             local found_path=$(find_project_dir_case_insensitive "$projects_base" "$inferred_project")
             if [ -n "$found_path" ]; then
                 echo "Found existing project directory: $found_path" >&2
                 echo "$found_path"
                 return 0
-            elif [ "$create_if_missing" = "true" ]; then
-                local project_path="$projects_base/$inferred_project"
-                echo "Creating inferred project directory: $project_path" >&2
-                mkdir -p "$project_path"
-                echo "$project_path"
-                return 0
             fi
+            # NOTE: Never create directory for inferred projects - require explicit label
         fi
 
-        echo "$projects_base"
-        return 0
+        # No project found and no explicit label - return empty (caller should handle)
+        return 1
     fi
 }
 
@@ -231,6 +264,88 @@ release_issue_lock() {
 get_issue_lock_age() {
     local issue_number="$1"
     local lock_path=$(get_issue_lock_path "$issue_number")
+    local started_file="$lock_path/started"
+
+    if [ -f "$started_file" ]; then
+        local start_time=$(cat "$started_file")
+        local now=$(date +%s)
+        echo $((now - start_time))
+    else
+        echo "0"
+    fi
+}
+
+# ============================================================================
+# PROJECT LOCKING - Only 1 task per project at a time
+# ============================================================================
+
+# Get lock path for a project (uses sanitized path as identifier)
+get_project_lock_path() {
+    local work_dir="$1"
+    # Sanitize path: replace / with _ to create a flat lock file name
+    local sanitized=$(echo "$work_dir" | sed 's|/|_|g' | sed 's|^_||')
+    echo "$SCRIPT_DIR/logs/project-locks/$sanitized"
+}
+
+# Try to acquire lock for a project (atomic - mkdir fails if exists)
+acquire_project_lock() {
+    local work_dir="$1"
+    local issue_number="$2"
+    local lock_path=$(get_project_lock_path "$work_dir")
+
+    # Ensure parent directory exists
+    mkdir -p "$(dirname "$lock_path")"
+
+    # Try to create lock directory (atomic operation)
+    if mkdir "$lock_path" 2>/dev/null; then
+        # Write start time and issue number for tracking
+        date +%s > "$lock_path/started"
+        echo "$issue_number" > "$lock_path/issue"
+        log "Acquired project lock for $work_dir (issue #$issue_number)"
+        return 0
+    fi
+    return 1
+}
+
+# Release lock for a project
+release_project_lock() {
+    local work_dir="$1"
+    local lock_path=$(get_project_lock_path "$work_dir")
+
+    if [ -d "$lock_path" ]; then
+        rm -rf "$lock_path"
+        log "Released project lock for $work_dir"
+    fi
+}
+
+# Get info about who holds the project lock
+get_project_lock_info() {
+    local work_dir="$1"
+    local lock_path=$(get_project_lock_path "$work_dir")
+
+    if [ -d "$lock_path" ]; then
+        local issue=$(cat "$lock_path/issue" 2>/dev/null || echo "unknown")
+        local start_time=$(cat "$lock_path/started" 2>/dev/null || echo "0")
+        local now=$(date +%s)
+        local age=$((now - start_time))
+        local age_mins=$((age / 60))
+        echo "issue=#$issue, running for ${age_mins}m"
+    else
+        echo ""
+    fi
+}
+
+# Check if project is locked
+is_project_locked() {
+    local work_dir="$1"
+    local lock_path=$(get_project_lock_path "$work_dir")
+    [ -d "$lock_path" ]
+}
+
+# Get lock age for stale lock cleanup
+get_project_lock_age() {
+    local work_dir="$1"
+    local lock_path=$(get_project_lock_path "$work_dir")
     local started_file="$lock_path/started"
 
     if [ -f "$started_file" ]; then
@@ -386,6 +501,29 @@ Only work on THIS task." 2>&1 | tee "$task_output"
     return 1
 }
 
+# Issue-scoped session tracking to prevent cross-issue contamination
+SESSION_ISSUE_FILE="$SCRIPT_DIR/logs/.current-issue-session"
+
+# Check if we're continuing the same issue (not just same project)
+can_continue_issue_session() {
+    local current_issue="$1"
+    if [[ -f "$SESSION_ISSUE_FILE" ]]; then
+        local last_issue=$(cat "$SESSION_ISSUE_FILE" 2>/dev/null)
+        [[ "$last_issue" == "$current_issue" ]]
+    else
+        return 1
+    fi
+}
+
+set_session_issue() {
+    local issue="$1"
+    echo "$issue" > "$SESSION_ISSUE_FILE"
+}
+
+clear_session_issue() {
+    rm -f "$SESSION_ISSUE_FILE"
+}
+
 # Process a single issue
 process_issue() {
     local issue_number="$1"
@@ -421,21 +559,71 @@ _Checked at $(date '+%Y-%m-%d %H:%M:%S')_" 2>/dev/null || true
     gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
         --body "🤖 **Pauly is working on this...**" 2>/dev/null
 
-    # Get project from labels or infer from title
-    local project=$(get_project_from_labels "$labels")
-    # Allow creating directory for new projects
-    local work_dir=$(get_task_directory "$project" "$title" "true")
+    # IMPORTANT: Clear session when starting a NEW issue to prevent cross-issue contamination
+    if ! can_continue_issue_session "$issue_number"; then
+        log "New issue detected - clearing previous session to prevent task mixing"
+        clear_session_project
+        clear_session_issue
+        set_session_issue "$issue_number"
+    fi
 
-    if [ $? -ne 0 ]; then
+    # Determine working directory based on labels
+    local project=$(get_project_from_labels "$labels")
+    local has_explicit_label="false"
+    local work_dir=""
+
+    if [ -n "$project" ]; then
+        # Explicit project/product label - work in ~/Projects
+        has_explicit_label="true"
+        work_dir=$(get_task_directory "$project" "$title" "true" "true")
+    elif is_pauly_task "$title" "$body" "$labels"; then
+        # Task is about Pauly itself - work in ~/.pauly
+        log "Detected Pauly self-referential task - working in ~/.pauly"
+        work_dir="$SCRIPT_DIR"
+    else
+        # No explicit label and not a Pauly task - try to find existing project only
+        work_dir=$(get_task_directory "" "$title" "false" "false")
+    fi
+
+    if [ $? -ne 0 ] || [ -z "$work_dir" ]; then
+        local error_msg="Could not determine project directory."
+        if [ -z "$project" ]; then
+            error_msg="$error_msg
+
+**Missing project/product label.** Please add a label like \`project:myproject\` or \`product:myproject\` to specify which project this task belongs to.
+
+Without an explicit label, Pauly will NOT create new directories in ~/Projects."
+        fi
         gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
-            --body "❌ **Error:** Could not determine project directory for: $project" 2>/dev/null
+            --body "❌ **Error:** $error_msg" 2>/dev/null
         gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
             --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
         release_issue_lock "$issue_number"
         return 1
     fi
 
-    log "Working directory: $work_dir"
+    log "Working directory: $work_dir (explicit_label=$has_explicit_label)"
+
+    # PROJECT LOCK: Only 1 task per project at a time
+    if ! acquire_project_lock "$work_dir" "$issue_number"; then
+        local lock_info=$(get_project_lock_info "$work_dir")
+        log "Project $work_dir is locked ($lock_info) - skipping issue #$issue_number"
+
+        gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
+            --body "⏳ **Waiting for project lock**
+
+Another task is currently running on this project ($lock_info).
+
+This issue will be processed once the other task completes.
+
+_Checked at $(date '+%Y-%m-%d %H:%M:%S')_" 2>/dev/null
+
+        # Remove in-progress label since we're not actually processing
+        gh issue edit "$issue_number" -R "$GITHUB_TASKS_REPO" \
+            --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
+        release_issue_lock "$issue_number"
+        return 0
+    fi
 
     # Clear session if switching to a different project (ensures isolation)
     if ! can_continue_session "$work_dir"; then
@@ -473,14 +661,20 @@ _Checked at $(date '+%Y-%m-%d %H:%M:%S')_" 2>/dev/null || true
         local temp_output=$(mktemp)
         claude --dangerously-skip-permissions -p "You received a task via GitHub issue.
 
+=== ISSUE CONTEXT ===
+Issue Number: #$issue_number
 Title: $title
-
-Task:
-$body
-
+Labels: $labels
 Working directory: $work_dir
 
-IMPORTANT: If this is a substantial project or feature:
+=== TASK DESCRIPTION ===
+$body
+
+=== INSTRUCTIONS ===
+CRITICAL: You are working on issue #$issue_number ONLY. Do not mix tasks from other issues.
+This task is ISOLATED to: $work_dir
+
+If this is a substantial project or feature:
 1. Create a TASKS.md file with a checklist of tasks to complete
 2. Create a CONTEXT.md file with project overview and commands
 3. Do NOT mark the task as done - just set up the plan
@@ -540,7 +734,8 @@ $(tail -50 <<< "$loop_result")
 \`\`\`" 2>/dev/null
 
                 # Keep in-progress label, don't close
-                # Release lock so next run can continue if label is removed
+                # Release locks so next run can continue
+                release_project_lock "$work_dir"
                 release_issue_lock "$issue_number"
                 log "Issue #$issue_number still in progress"
                 return 0
@@ -568,8 +763,12 @@ $(tail -100 <<< "$result")
         --remove-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
     gh issue close "$issue_number" -R "$GITHUB_TASKS_REPO" 2>/dev/null
 
-    # Release lock AFTER closing issue (at very end of function)
+    # Release locks AFTER closing issue (at very end of function)
+    release_project_lock "$work_dir"
     release_issue_lock "$issue_number"
+
+    # Clear issue session after completion to ensure next issue starts fresh
+    clear_session_issue
 
     log "Issue #$issue_number completed and closed"
 }
@@ -594,6 +793,27 @@ main() {
                 if [ $age -gt $stale_threshold ]; then
                     local issue_num=$(basename "$lock_path" | sed 's/issue-//')
                     log "Cleaning up stale lock for issue #$issue_num (${age}s old)"
+                    rm -rf "$lock_path"
+                fi
+            fi
+        done
+    fi
+
+    # Clean up stale project locks (older than 1 hour)
+    local project_lock_dir="$SCRIPT_DIR/logs/project-locks"
+    if [ -d "$project_lock_dir" ]; then
+        for lock_path in "$project_lock_dir"/*; do
+            [ -d "$lock_path" ] || continue
+
+            local started_file="$lock_path/started"
+            if [ -f "$started_file" ]; then
+                local start_time=$(cat "$started_file")
+                local age=$((now - start_time))
+
+                if [ $age -gt $stale_threshold ]; then
+                    local project_name=$(basename "$lock_path")
+                    local issue_num=$(cat "$lock_path/issue" 2>/dev/null || echo "unknown")
+                    log "Cleaning up stale project lock for $project_name (issue #$issue_num, ${age}s old)"
                     rm -rf "$lock_path"
                 fi
             fi
