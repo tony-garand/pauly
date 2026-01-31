@@ -154,6 +154,17 @@ export async function killAllProcesses() {
   return response.json() as Promise<{ success: boolean; killed: number }>;
 }
 
+export async function gitPullPauly() {
+  const response = await fetch(`${API_BASE}/pauly/git-pull`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json() as Promise<{ success: boolean; output: string; updated: boolean }>;
+}
+
 export async function fetchPaulyConfig() {
   return fetchApi<{ config: Record<string, string> }>("/pauly/config");
 }

@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from "express";
-import { getPaulyStatus, getSanitizedConfig, getLogContent, getAvailableLogs } from "../lib/pauly.js";
+import { execFileSync } from "child_process";
+import { getPaulyStatus, getSanitizedConfig, getLogContent, getAvailableLogs, PAULY_DIR } from "../lib/pauly.js";
 import { updateConfigValue, deleteConfigValue } from "../lib/config.js";
 import { killAllClaudeProcesses } from "../lib/projects.js";
 
@@ -76,6 +77,29 @@ router.post("/kill", (_req, res) => {
   }
 
   res.json({ success: true, killed: result.killed });
+});
+
+// Git pull - update Pauly from remote
+router.post("/git-pull", (_req, res) => {
+  try {
+    const output = execFileSync("git", ["pull"], {
+      cwd: PAULY_DIR,
+      encoding: "utf-8",
+      timeout: 30000,
+    });
+
+    const alreadyUpToDate = output.includes("Already up to date");
+    res.json({
+      success: true,
+      output: output.trim(),
+      updated: !alreadyUpToDate
+    });
+  } catch (err) {
+    const error = err as Error & { stderr?: string };
+    res.status(500).json({
+      error: error.stderr || error.message || "Git pull failed"
+    });
+  }
 });
 
 export default router;

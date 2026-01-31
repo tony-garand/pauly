@@ -3,6 +3,9 @@ import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
+export const PAULY_DIR = join(homedir(), ".pauly");
+export const LOGS_DIR = join(PAULY_DIR, "logs");
+
 export interface PaulyJob {
   name: string;
   schedule: string;

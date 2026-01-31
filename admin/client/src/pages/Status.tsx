@@ -27,6 +27,8 @@ import {
   Plus,
   Skull,
   Loader2,
+  GitBranch,
+  RefreshCw,
 } from "lucide-react";
 import {
   fetchPaulyStatus,
@@ -34,6 +36,7 @@ import {
   updatePaulyConfig,
   deletePaulyConfig,
   killAllProcesses,
+  gitPullPauly,
   type PaulyJob,
 } from "@/lib/api";
 
@@ -51,6 +54,8 @@ export function Status() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [killing, setKilling] = useState(false);
   const [killResult, setKillResult] = useState<{ killed: number } | null>(null);
+  const [pulling, setPulling] = useState(false);
+  const [pullResult, setPullResult] = useState<{ output: string; updated: boolean } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -135,6 +140,20 @@ export function Status() {
     }
   };
 
+  const handleGitPull = async () => {
+    setPulling(true);
+    setPullResult(null);
+    try {
+      const result = await gitPullPauly();
+      setPullResult({ output: result.output, updated: result.updated });
+      setTimeout(() => setPullResult(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to pull updates");
+    } finally {
+      setPulling(false);
+    }
+  };
+
   if (loading) {
     return <Loading message="Loading Pauly status..." />;
   }
@@ -165,6 +184,38 @@ export function Status() {
           <Badge variant="default" className="bg-green-500 hover:bg-green-600">
             Active
           </Badge>
+        </CardContent>
+      </Card>
+
+      {/* Git Pull Card */}
+      <Card>
+        <CardContent className="flex items-center gap-4 py-4">
+          <GitBranch className="h-8 w-8 text-primary" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Update Pauly</p>
+            <p className="text-muted-foreground text-sm">
+              Pull latest changes from remote repository
+            </p>
+          </div>
+          {pullResult && (
+            <Badge variant="outline" className={pullResult.updated ? "border-green-500 text-green-500" : ""}>
+              {pullResult.updated ? "Updated!" : "Already up to date"}
+            </Badge>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleGitPull}
+            disabled={pulling}
+            className="gap-2"
+          >
+            {pulling ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {pulling ? "Pulling..." : "Git Pull"}
+          </Button>
         </CardContent>
       </Card>
 
