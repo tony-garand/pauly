@@ -10,7 +10,7 @@ Add TODO.md CRUD functionality to admin UI with notifications when files are upd
 - [x] Add `hasTodoMd` and `todoMdContent` fields to ProjectDetail type
 
 ### Phase 2: Install Toast/Notification Library
-- [ ] Install sonner package in admin client (`pnpm add sonner`)
+- [x] Install sonner package in admin client (`pnpm add sonner`)
 - [ ] Add Toaster component to App.tsx or Layout
 - [ ] Create toast utility functions for success/error notifications
 
