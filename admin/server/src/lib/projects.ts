@@ -37,6 +37,8 @@ export interface ProjectDetail extends ProjectInfo {
   };
   tasks?: TaskItem[];
   contextMdContent?: string;
+  hasTodoMd?: boolean;
+  todoMdContent?: string;
   lastModified?: string;
 }
 
@@ -323,6 +325,16 @@ export function getProjectDetail(name: string): ProjectDetail | null {
   if (basicInfo.hasContextMd) {
     try {
       detail.contextMdContent = readFileSync(contextPath, "utf-8");
+    } catch {
+      // Ignore read errors
+    }
+  }
+
+  const todoPath = join(projectPath, "TODO.md");
+  detail.hasTodoMd = existsSync(todoPath);
+  if (detail.hasTodoMd) {
+    try {
+      detail.todoMdContent = readFileSync(todoPath, "utf-8");
     } catch {
       // Ignore read errors
     }

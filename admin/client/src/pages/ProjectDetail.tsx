@@ -65,12 +65,15 @@ import {
   fetchRailwayProjects,
   updateContextMd,
   deleteContextMd,
+  updateTodoMd,
+  deleteTodoMd,
   archiveAllTasks,
   type ProjectDetail as ProjectDetailType,
   type DevJobStatus,
   type RailwayStatus,
   type RailwayProject,
 } from "@/lib/api";
+import { showSuccess, showError } from "@/lib/toast";
 
 export function ProjectDetail() {
   const { name } = useParams<{ name: string }>();
@@ -98,6 +101,10 @@ export function ProjectDetail() {
   const [editingContext, setEditingContext] = useState(false);
   const [contextContent, setContextContent] = useState("");
   const [savingContext, setSavingContext] = useState(false);
+  const [showTodo, setShowTodo] = useState(false);
+  const [editingTodo, setEditingTodo] = useState(false);
+  const [todoContent, setTodoContent] = useState("");
+  const [savingTodo, setSavingTodo] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!name) return;
@@ -265,6 +272,56 @@ export function ProjectDetail() {
     setEditingContext(false);
     if (!project?.hasContextMd) {
       setShowContext(false);
+    }
+  };
+
+  const handleEditTodo = () => {
+    setTodoContent(project?.todoMdContent || "# TODO\n\nNon-development tasks and notes...");
+    setEditingTodo(true);
+    setShowTodo(true);
+  };
+
+  const handleSaveTodo = async () => {
+    if (!name) return;
+    setSavingTodo(true);
+    setError(null);
+    try {
+      await updateTodoMd(name, todoContent);
+      await loadData();
+      setEditingTodo(false);
+      showSuccess("TODO.md saved successfully");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to save TODO.md";
+      setError(msg);
+      showError(msg);
+    } finally {
+      setSavingTodo(false);
+    }
+  };
+
+  const handleDeleteTodo = async () => {
+    if (!name) return;
+    const confirmed = window.confirm("Are you sure you want to delete TODO.md?");
+    if (!confirmed) return;
+
+    setError(null);
+    try {
+      await deleteTodoMd(name);
+      await loadData();
+      setShowTodo(false);
+      setEditingTodo(false);
+      showSuccess("TODO.md deleted");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to delete TODO.md";
+      setError(msg);
+      showError(msg);
+    }
+  };
+
+  const handleCancelEditTodo = () => {
+    setEditingTodo(false);
+    if (!project?.hasTodoMd) {
+      setShowTodo(false);
     }
   };
 
@@ -483,6 +540,12 @@ export function ProjectDetail() {
             CONTEXT.md
           </Badge>
         )}
+        {project.hasTodoMd && (
+          <Badge variant="outline">
+            <FileText className="h-3 w-3 mr-1" />
+            TODO.md
+          </Badge>
+        )}
         {project.tasks && (
           <Badge variant="outline">
             <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -634,6 +697,115 @@ export function ProjectDetail() {
             ) : (
               <pre className="p-3 bg-muted rounded-lg text-sm font-mono overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
                 {project.contextMdContent || "No content"}
+              </pre>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* TODO.md Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              TODO.md
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {project.hasTodoMd && !editingTodo && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowTodo(!showTodo)}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {showTodo ? <ChevronUp className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    {showTodo ? "Hide" : "View"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditTodo}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </Button>
+                </>
+              )}
+              {!project.hasTodoMd && !editingTodo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEditTodo}
+                  className="h-7 text-xs gap-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  Create
+                </Button>
+              )}
+              {editingTodo && (
+                <>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleSaveTodo}
+                    disabled={savingTodo}
+                    className="h-7 text-xs gap-1"
+                  >
+                    {savingTodo ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Save className="h-3 w-3" />
+                    )}
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEditTodo}
+                    disabled={savingTodo}
+                    className="h-7 text-xs gap-1"
+                  >
+                    <X className="h-3 w-3" />
+                    Cancel
+                  </Button>
+                  {project.hasTodoMd && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleDeleteTodo}
+                      disabled={savingTodo}
+                      className="h-7 text-xs gap-1 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          <CardDescription>
+            {project.hasTodoMd
+              ? "Non-development tasks and notes"
+              : "Track non-actionable items that can't be done by development"}
+          </CardDescription>
+        </CardHeader>
+        {(showTodo || editingTodo) && (
+          <CardContent>
+            {editingTodo ? (
+              <textarea
+                value={todoContent}
+                onChange={(e) => setTodoContent(e.target.value)}
+                disabled={savingTodo}
+                rows={15}
+                className="w-full px-3 py-2 text-sm font-mono rounded-md border border-input bg-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y min-h-[200px]"
+                placeholder="# TODO&#10;&#10;Non-development tasks and notes..."
+              />
+            ) : (
+              <pre className="p-3 bg-muted rounded-lg text-sm font-mono overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap">
+                {project.todoMdContent || "No content"}
               </pre>
             )}
           </CardContent>

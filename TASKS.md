@@ -15,19 +15,19 @@ Add TODO.md CRUD functionality to admin UI with notifications when files are upd
 - [x] Create toast utility functions for success/error notifications
 
 ### Phase 3: TODO.md UI in ProjectDetail
-- [ ] Add TODO.md card component (similar to CONTEXT.md card)
-- [ ] Add view/edit/create/delete buttons
-- [ ] Add textarea for editing TODO.md content
-- [ ] Wire up save/delete handlers with API calls
-- [ ] Show toast notifications on save/delete success/error
+- [x] Add TODO.md card component (similar to CONTEXT.md card)
+- [x] Add view/edit/create/delete buttons
+- [x] Add textarea for editing TODO.md content
+- [x] Wire up save/delete handlers with API calls
+- [x] Show toast notifications on save/delete success/error
 
 ### Phase 4: Backend - Add hasTodoMd to Project Details
-- [ ] Update `getProjectDetail` in `admin/server/src/lib/projects.ts` to include `hasTodoMd` and `todoMdContent`
+- [x] Update `getProjectDetail` in `admin/server/src/lib/projects.ts` to include `hasTodoMd` and `todoMdContent`
 
 ### Phase 5: Notification on Issue/Email Creation
 - [ ] When GitHub issue creates/updates TODO.md, comment on the issue
 - [ ] When email task creates/updates TODO.md, send email notification
-- [ ] When admin UI creates/updates TODO.md, show sonner toast
+- [x] When admin UI creates/updates TODO.md, show sonner toast
 
 ### Phase 6: Task Actionability
 - [ ] Update dev scripts to move non-actionable tasks to TODO.md
