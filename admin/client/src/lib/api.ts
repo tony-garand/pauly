@@ -141,6 +141,17 @@ export async function fetchPaulyStatus() {
   return fetchApi<PaulyStatus>("/pauly/status");
 }
 
+export async function killAllProcesses() {
+  const response = await fetch(`${API_BASE}/pauly/kill`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json() as Promise<{ success: boolean; killed: number }>;
+}
+
 export async function fetchPaulyConfig() {
   return fetchApi<{ config: Record<string, string> }>("/pauly/config");
 }
@@ -218,6 +229,17 @@ export async function deleteProjectTask(projectName: string, taskIndex: number) 
     throw new Error(data.error || `API error: ${response.status}`);
   }
   return response.json();
+}
+
+export async function archiveAllTasks(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/tasks/archive`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json() as Promise<{ success: boolean; archived: number }>;
 }
 
 export async function createProjectIssue(projectName: string, title: string, body: string) {
@@ -298,6 +320,62 @@ export async function stopDevProcess(projectName: string) {
 export async function restartDevProcess(projectName: string) {
   const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/dev/restart`, {
     method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchContextMd(projectName: string) {
+  return fetchApi<{ content: string }>(`/projects/${encodeURIComponent(projectName)}/context`);
+}
+
+export async function updateContextMd(projectName: string, content: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/context`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteContextMd(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/context`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchTodoMd(projectName: string) {
+  return fetchApi<{ content: string }>(`/projects/${encodeURIComponent(projectName)}/todo`);
+}
+
+export async function updateTodoMd(projectName: string, content: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/todo`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteTodoMd(projectName: string) {
+  const response = await fetch(`${API_BASE}/projects/${encodeURIComponent(projectName)}/todo`, {
+    method: "DELETE",
   });
   if (!response.ok) {
     const data = await response.json();
