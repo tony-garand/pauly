@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from "express";
-import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo, startDevProcess, stopDevProcess, restartDevProcess } from "../lib/projects.js";
+import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, deleteProject, createIssue, getIssueJobStatus, getDevJobStatus, clearDevLog, cloneGitHubRepo, startDevProcess, stopDevProcess, restartDevProcess, getContextMd, updateContextMd, deleteContextMd, archiveAllTasks, getTodoMd, updateTodoMd, deleteTodoMd } from "../lib/projects.js";
 
 const router: RouterType = Router();
 
@@ -112,6 +112,19 @@ router.delete("/:name/tasks/:index", (req, res) => {
   res.json({ success: true });
 });
 
+// Archive all tasks
+router.post("/:name/tasks/archive", (req, res) => {
+  const { name } = req.params;
+  const result = archiveAllTasks(name);
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true, archived: result.archived });
+});
+
 // Create an issue (generates tasks via Claude)
 router.post("/:name/issues", (req, res) => {
   const { name } = req.params;
@@ -186,6 +199,98 @@ router.post("/:name/dev/restart", (req, res) => {
 
   if (!result.success) {
     res.status(400).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Get CONTEXT.md content
+router.get("/:name/context", (req, res) => {
+  const { name } = req.params;
+  const content = getContextMd(name);
+
+  if (content === null) {
+    res.status(404).json({ error: "CONTEXT.md not found" });
+    return;
+  }
+
+  res.json({ content });
+});
+
+// Update CONTEXT.md content
+router.put("/:name/context", (req, res) => {
+  const { name } = req.params;
+  const { content } = req.body;
+
+  if (typeof content !== "string") {
+    res.status(400).json({ error: "Content is required" });
+    return;
+  }
+
+  const result = updateContextMd(name, content);
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Delete CONTEXT.md
+router.delete("/:name/context", (req, res) => {
+  const { name } = req.params;
+  const result = deleteContextMd(name);
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Get TODO.md content
+router.get("/:name/todo", (req, res) => {
+  const { name } = req.params;
+  const content = getTodoMd(name);
+
+  if (content === null) {
+    res.status(404).json({ error: "TODO.md not found" });
+    return;
+  }
+
+  res.json({ content });
+});
+
+// Update TODO.md content
+router.put("/:name/todo", (req, res) => {
+  const { name } = req.params;
+  const { content } = req.body;
+
+  if (typeof content !== "string") {
+    res.status(400).json({ error: "Content is required" });
+    return;
+  }
+
+  const result = updateTodoMd(name, content);
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
+    return;
+  }
+
+  res.json({ success: true });
+});
+
+// Delete TODO.md
+router.delete("/:name/todo", (req, res) => {
+  const { name } = req.params;
+  const result = deleteTodoMd(name);
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error });
     return;
   }
 

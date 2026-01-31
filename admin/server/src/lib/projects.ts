@@ -421,6 +421,64 @@ export function deleteTask(projectName: string, taskIndex: number): boolean {
   }
 }
 
+export function archiveAllTasks(projectName: string): { success: boolean; archived: number; error?: string } {
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+  const tasksPath = join(projectPath, "TASKS.md");
+  const archivePath = join(projectPath, "TASKS-ARCHIVE.md");
+
+  if (!existsSync(tasksPath)) {
+    return { success: false, archived: 0, error: "No TASKS.md found" };
+  }
+
+  try {
+    const content = readFileSync(tasksPath, "utf-8");
+    const lines = content.split("\n");
+
+    // Extract all task lines
+    const taskLines: string[] = [];
+    const nonTaskLines: string[] = [];
+
+    for (const line of lines) {
+      if (line.match(/^\s*-\s*\[[\sx]\]/i)) {
+        taskLines.push(line);
+      } else {
+        nonTaskLines.push(line);
+      }
+    }
+
+    if (taskLines.length === 0) {
+      return { success: true, archived: 0 };
+    }
+
+    // Append tasks to archive file
+    const timestamp = new Date().toISOString().split("T")[0];
+    let archiveContent = "";
+    if (existsSync(archivePath)) {
+      archiveContent = readFileSync(archivePath, "utf-8");
+      if (!archiveContent.endsWith("\n")) {
+        archiveContent += "\n";
+      }
+    } else {
+      archiveContent = "# Tasks Archive\n\n";
+    }
+
+    archiveContent += `## Archived ${timestamp}\n\n`;
+    archiveContent += taskLines.join("\n") + "\n";
+
+    writeFileSync(archivePath, archiveContent);
+
+    // Clear tasks from TASKS.md but keep headers
+    const newContent = nonTaskLines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+    writeFileSync(tasksPath, newContent);
+
+    return { success: true, archived: taskLines.length };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, archived: 0, error: errorMsg };
+  }
+}
+
 export function deleteProject(projectName: string): { success: boolean; error?: string } {
   const projectsDir = getProjectsDir();
   const projectPath = join(projectsDir, projectName);
@@ -739,6 +797,191 @@ export function getDevJobStatus(projectName: string): DevJobStatus {
   }
 
   return { status: "idle", log: lastLines };
+}
+
+export function getContextMd(projectName: string): string | null {
+  const projectsDir = getProjectsDir();
+  const contextPath = join(projectsDir, projectName, "CONTEXT.md");
+
+  if (!existsSync(contextPath)) {
+    return null;
+  }
+
+  try {
+    return readFileSync(contextPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+export function updateContextMd(projectName: string, content: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+  const contextPath = join(projectPath, "CONTEXT.md");
+
+  // Validate project exists
+  if (!existsSync(projectPath)) {
+    return { success: false, error: "Project not found" };
+  }
+
+  // Prevent path traversal
+  if (projectName.includes("..") || projectName.includes("/") || projectName.includes("\\")) {
+    return { success: false, error: "Invalid project name" };
+  }
+
+  try {
+    writeFileSync(contextPath, content);
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to save: ${errorMsg}` };
+  }
+}
+
+export function deleteContextMd(projectName: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const contextPath = join(projectsDir, projectName, "CONTEXT.md");
+
+  if (!existsSync(contextPath)) {
+    return { success: true }; // Already doesn't exist
+  }
+
+  try {
+    rmSync(contextPath);
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to delete: ${errorMsg}` };
+  }
+}
+
+export function getTodoMd(projectName: string): string | null {
+  const projectsDir = getProjectsDir();
+  const todoPath = join(projectsDir, projectName, "TODO.md");
+
+  if (!existsSync(todoPath)) {
+    return null;
+  }
+
+  try {
+    return readFileSync(todoPath, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+export function updateTodoMd(projectName: string, content: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const projectPath = join(projectsDir, projectName);
+  const todoPath = join(projectPath, "TODO.md");
+
+  // Validate project exists
+  if (!existsSync(projectPath)) {
+    return { success: false, error: "Project not found" };
+  }
+
+  // Prevent path traversal
+  if (projectName.includes("..") || projectName.includes("/") || projectName.includes("\\")) {
+    return { success: false, error: "Invalid project name" };
+  }
+
+  try {
+    writeFileSync(todoPath, content);
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to save: ${errorMsg}` };
+  }
+}
+
+export function deleteTodoMd(projectName: string): { success: boolean; error?: string } {
+  const projectsDir = getProjectsDir();
+  const todoPath = join(projectsDir, projectName, "TODO.md");
+
+  if (!existsSync(todoPath)) {
+    return { success: true }; // Already doesn't exist
+  }
+
+  try {
+    rmSync(todoPath);
+    return { success: true };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Failed to delete: ${errorMsg}` };
+  }
+}
+
+export function killAllClaudeProcesses(): { success: boolean; killed: number; error?: string } {
+  try {
+    // Find all Claude and pauly dev processes
+    let pids: string[] = [];
+
+    try {
+      const claudePids = execFileSync("pgrep", ["-f", "claude"], {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"]
+      }).trim().split("\n").filter(Boolean);
+      pids = pids.concat(claudePids);
+    } catch {
+      // No claude processes
+    }
+
+    try {
+      const devPids = execFileSync("pgrep", ["-f", "pauly dev"], {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"]
+      }).trim().split("\n").filter(Boolean);
+      pids = pids.concat(devPids);
+    } catch {
+      // No pauly dev processes
+    }
+
+    // Deduplicate
+    pids = [...new Set(pids)];
+
+    if (pids.length === 0) {
+      return { success: true, killed: 0 };
+    }
+
+    let killed = 0;
+    for (const pid of pids) {
+      try {
+        execFileSync("kill", ["-TERM", pid], { stdio: ["pipe", "pipe", "pipe"] });
+        killed++;
+      } catch {
+        // Process may have already exited
+      }
+    }
+
+    // Force kill any remaining after a short wait
+    setTimeout(() => {
+      for (const pid of pids) {
+        try {
+          execFileSync("kill", ["-9", pid], { stdio: ["pipe", "pipe", "pipe"] });
+        } catch {
+          // Ignore
+        }
+      }
+    }, 1000);
+
+    // Clear dev logs
+    const logsDir = join(homedir(), ".pauly", "logs");
+    try {
+      const files = readdirSync(logsDir);
+      for (const file of files) {
+        if (file.startsWith("dev-") && file.endsWith(".log")) {
+          rmSync(join(logsDir, file));
+        }
+      }
+    } catch {
+      // Ignore log cleanup errors
+    }
+
+    return { success: true, killed };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return { success: false, killed: 0, error: errorMsg };
+  }
 }
 
 export function clearDevLog(projectName: string): boolean {
