@@ -7,7 +7,7 @@ Add TODO.md CRUD functionality to admin UI with notifications when files are upd
 
 ### Phase 1: TODO.md API Client Functions
 - [x] Add TODO.md API functions to `admin/client/src/lib/api.ts` (getTodoMd, updateTodoMd, deleteTodoMd)
-- [ ] Add `hasTodoMd` and `todoMdContent` fields to ProjectDetail type
+- [x] Add `hasTodoMd` and `todoMdContent` fields to ProjectDetail type
 
 ### Phase 2: Install Toast/Notification Library
 - [ ] Install sonner package in admin client (`pnpm add sonner`)

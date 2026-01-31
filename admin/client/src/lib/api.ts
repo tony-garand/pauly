@@ -50,6 +50,8 @@ export interface ProjectDetail extends ProjectInfo {
   };
   tasks?: TaskItem[];
   contextMdContent?: string;
+  hasTodoMd?: boolean;
+  todoMdContent?: string;
   lastModified?: string;
 }
 
