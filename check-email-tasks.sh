@@ -13,6 +13,195 @@ IMAP_USER="${SMTP_USER}"
 IMAP_PASSWORD="${SMTP_PASSWORD}"
 ALLOWED_SENDERS="${ALLOWED_SENDERS:-$EMAIL}"
 
+# Process control commands from email (stop-all, status, etc.)
+# Returns: 0 if command was handled, 1 if not a control command
+process_control_command() {
+    local cmd="$1"
+    local body="$2"
+
+    case "$cmd" in
+        stop-all|stop|kill)
+            log "Running: pauly kill (from email)"
+            "$SCRIPT_DIR/pauly" kill 2>&1
+            echo ""
+            echo "All Claude and Pauly processes stopped."
+            return 0
+            ;;
+
+        status)
+            log "Running: pauly status (from email)"
+            "$SCRIPT_DIR/pauly" status 2>&1
+            return 0
+            ;;
+
+        admin\ start|admin-start)
+            log "Running: pauly admin start (from email)"
+            "$SCRIPT_DIR/pauly" admin start 2>&1
+            return 0
+            ;;
+
+        admin\ stop|admin-stop)
+            log "Running: pauly admin stop (from email)"
+            "$SCRIPT_DIR/pauly" admin stop 2>&1
+            return 0
+            ;;
+
+        admin\ restart|admin-restart)
+            log "Running: pauly admin restart (from email)"
+            "$SCRIPT_DIR/pauly" admin restart 2>&1
+            return 0
+            ;;
+
+        admin\ status|admin-status)
+            log "Running: pauly admin status (from email)"
+            "$SCRIPT_DIR/pauly" admin status 2>&1
+            return 0
+            ;;
+
+        logs|logs\ *)
+            local job=$(echo "$cmd" | awk '{print $2}')
+            log "Running: pauly logs $job (from email)"
+            "$SCRIPT_DIR/pauly" logs "$job" 2>&1 | tail -100
+            return 0
+            ;;
+
+        help|commands)
+            echo "Available Pauly email commands:"
+            echo ""
+            echo "Control Commands:"
+            echo "  stop-all, stop, kill  - Stop all Claude/Pauly processes"
+            echo "  status                - Show Pauly status"
+            echo "  admin start           - Start admin dashboard"
+            echo "  admin stop            - Stop admin dashboard"
+            echo "  admin restart         - Restart admin dashboard"
+            echo "  logs [job]            - View logs (last 100 lines)"
+            echo ""
+            echo "Dev Commands:"
+            echo "  dev init              - Create project from email body"
+            echo "  dev task              - Run task from email body"
+            echo "  dev [N]               - Run N iterations (default: 25)"
+            echo "  dev status            - Show dev progress"
+            echo ""
+            echo "GitHub Issues:"
+            echo "  Paste a GitHub issue URL in subject or body"
+            echo "  e.g., https://github.com/owner/repo/issues/123"
+            echo ""
+            echo "Regular Tasks:"
+            echo "  Any other subject will be executed as a Claude task"
+            return 0
+            ;;
+
+        *)
+            return 1  # Not a control command
+            ;;
+    esac
+}
+
+# Process GitHub issue links from email
+# Extracts issue URL and works on it like the GitHub tasks processor
+process_github_issue() {
+    local subject="$1"
+    local body="$2"
+
+    # Look for GitHub issue URL in subject or body
+    local issue_url=""
+    local url_pattern='https://github\.com/([^/]+)/([^/]+)/issues/([0-9]+)'
+
+    # Check subject first
+    if [[ "$subject" =~ $url_pattern ]]; then
+        issue_url="${BASH_REMATCH[0]}"
+    # Then check body
+    elif [[ "$body" =~ $url_pattern ]]; then
+        issue_url="${BASH_REMATCH[0]}"
+    else
+        return 1  # No GitHub issue URL found
+    fi
+
+    # Extract owner, repo, and issue number
+    if [[ "$issue_url" =~ https://github\.com/([^/]+)/([^/]+)/issues/([0-9]+) ]]; then
+        local owner="${BASH_REMATCH[1]}"
+        local repo="${BASH_REMATCH[2]}"
+        local issue_num="${BASH_REMATCH[3]}"
+
+        log "Processing GitHub issue: $owner/$repo#$issue_num"
+
+        # Fetch issue details using gh CLI
+        if ! command -v gh &> /dev/null; then
+            echo "Error: GitHub CLI (gh) not installed"
+            return 1
+        fi
+
+        local issue_title issue_body issue_labels
+        issue_title=$(gh issue view "$issue_num" --repo "$owner/$repo" --json title -q '.title' 2>&1)
+        issue_body=$(gh issue view "$issue_num" --repo "$owner/$repo" --json body -q '.body' 2>&1)
+        issue_labels=$(gh issue view "$issue_num" --repo "$owner/$repo" --json labels -q '.labels[].name' 2>&1)
+
+        if [[ "$issue_title" == *"error"* ]] || [[ -z "$issue_title" ]]; then
+            echo "Error fetching issue: $issue_title"
+            return 1
+        fi
+
+        echo "Issue: $issue_title"
+        echo "Labels: $issue_labels"
+        echo ""
+
+        # Determine target project from labels or repo name
+        local project_name=""
+        for label in $issue_labels; do
+            if [[ "$label" =~ ^project:(.+)$ ]] || [[ "$label" =~ ^product:(.+)$ ]]; then
+                project_name="${BASH_REMATCH[1]}"
+                break
+            fi
+        done
+
+        # Fall back to repo name if no project label
+        [ -z "$project_name" ] && project_name="$repo"
+
+        local project_path="${PROJECTS_DIR:-$HOME/Projects}/$project_name"
+
+        if [ ! -d "$project_path" ]; then
+            echo "Project not found: $project_path"
+            echo "Create the project first or use a project: label on the issue."
+            return 1
+        fi
+
+        cd "$project_path"
+        echo "Working in: $project_path"
+        echo ""
+
+        # Execute the issue as a task
+        local result
+        result=$(claude --dangerously-skip-permissions -p "Work on this GitHub issue:
+
+Issue #$issue_num: $issue_title
+
+Description:
+$issue_body
+
+Repository: $owner/$repo
+Project Directory: $project_path
+
+Please analyze this issue and implement the necessary changes. Provide a summary of what you did." 2>&1)
+
+        echo "$result"
+
+        # Add comment to the issue with results
+        local comment="🤖 **Pauly processed this issue via email**
+
+**Summary:**
+$(echo "$result" | tail -50)
+
+---
+_Automated by [Pauly](https://github.com/tony-garand/pauly)_"
+
+        gh issue comment "$issue_num" --repo "$owner/$repo" --body "$comment" 2>&1 || true
+
+        return 0
+    fi
+
+    return 1
+}
+
 # Process dev commands from email
 # Usage: process_dev_command "dev init" "idea content" "/tmp/dir"
 process_dev_command() {
@@ -232,19 +421,28 @@ PYTHON_SCRIPT
 
         log "Processing task from $sender: $subject"
 
-        # Check if this is a dev command
+        # Check command type and process accordingly
         local result=""
         local reply_subject=""
 
         # Extract command from subject (lowercase for matching)
         local cmd=$(echo "$subject" | tr '[:upper:]' '[:lower:]')
 
-        if [[ "$cmd" =~ ^dev ]]; then
-            # Handle dev commands
+        # 1. Check for control commands (stop-all, status, etc.)
+        if result=$(process_control_command "$cmd" "$body"); then
+            reply_subject="Re: $subject - Command Executed"
+
+        # 2. Check for GitHub issue links
+        elif result=$(process_github_issue "$subject" "$body"); then
+            reply_subject="Re: $subject - Issue Processed"
+
+        # 3. Check for dev commands
+        elif [[ "$cmd" =~ ^dev ]]; then
             result=$(process_dev_command "$cmd" "$body" "$temp_dir")
             reply_subject="Re: $subject - Dev Mode"
+
+        # 4. Regular task - execute via Claude
         else
-            # Regular task - execute via Claude
             # Use --continue for subsequent tasks to maintain context
             if [[ "$first_email_task" == "true" ]]; then
                 result=$(claude --dangerously-skip-permissions -p "You received a task via email. Execute it and provide a summary of what you did.
