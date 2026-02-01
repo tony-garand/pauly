@@ -1,0 +1,16 @@
+{
+  "name": "pauly",
+  "version": "1.0.0",
+  "description": "Autonomous AI-powered task automation CLI",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tony-garand/pauly.git"
+  },
+  "author": "Tony Garand",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tony-garand/pauly/issues"
+  },
+  "homepage": "https://github.com/tony-garand/pauly#readme"
+}

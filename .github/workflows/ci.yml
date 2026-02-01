@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: admin
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: admin/server
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: admin/client
+
+      - name: Typecheck server
+        run: npm run typecheck
+        working-directory: admin/server
+
+      - name: Typecheck client
+        run: npm run build
+        working-directory: admin/client
+        env:
+          CI: true
+
+      - name: Lint client
+        run: npm run lint
+        working-directory: admin/client
+
+  build:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: admin/server
+
+      - name: Install client dependencies
+        run: npm ci
+        working-directory: admin/client
+
+      - name: Build server
+        run: npm run build
+        working-directory: admin/server
+
+      - name: Build client
+        run: npm run build
+        working-directory: admin/client
+
+      - name: Verify build artifacts
+        run: |
+          echo "Checking server build..."
+          ls -la admin/server/dist/
+
+          echo "Checking client build..."
+          ls -la admin/client/dist/

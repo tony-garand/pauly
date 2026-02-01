@@ -309,3 +309,65 @@ This allows efficient multi-tasking within a project while ensuring isolation be
 - Railway CLI (`railway`) for cloud deployments
 - msmtp for email notifications
 - cron for scheduling
+
+## CI/CD Pipeline
+
+Pauly uses GitHub Actions for continuous integration and automated version management.
+
+### Workflows
+
+**CI (`.github/workflows/ci.yml`)**
+- Runs on all pushes to `main` and pull requests
+- Type checks both server and client code
+- Lints the client codebase
+- Builds and verifies artifacts
+
+**Version Bump (`.github/workflows/version-bump.yml`)**
+- Automatically bumps patch version on push to `main`
+- Skips documentation-only changes
+- Updates version in root, server, and client package.json files
+- Commits with `[skip ci]` to prevent infinite loops
+
+### CI/CD Best Practices
+
+When working with Pauly's CI/CD:
+
+#### 1. Pull Before Push (Recommended)
+Always pull to incorporate CI's version bump commits before pushing:
+```bash
+git pull --rebase origin main
+git push
+```
+
+#### 2. Use `[skip ci]` for Version-Sensitive Commits
+To make changes without triggering a version bump:
+```bash
+git commit -m "your message [skip ci]"
+git push
+```
+Use sparingly - only for documentation-only changes or CI fixes.
+
+#### 3. Avoid Force Push to Main
+Force pushing can overwrite CI automation commits:
+- Use `git push` without `--force`
+- If you must force push, wait for CI to complete, then pull to sync
+
+#### 4. After Force Push Recovery
+If you've overwritten a version bump:
+```bash
+# CI will run again on your push
+# Wait for it to complete, then pull to sync
+git pull origin main
+```
+
+#### 5. Check CI Status
+After pushing, monitor the Actions tab to ensure:
+- CI passes (lint, typecheck, build)
+- Version bump completes (if applicable)
+
+### Version Management
+
+The project uses semantic versioning:
+- Root `package.json` holds the canonical version
+- Admin server and client versions sync automatically
+- Version bumps are patch-level (1.0.0 → 1.0.1)

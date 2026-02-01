@@ -1,0 +1,69 @@
+name: Version Bump
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE'
+      - '.gitignore'
+
+jobs:
+  bump-version:
+    # Skip if commit message contains [skip ci] or was made by github-actions
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      github.event.head_commit.author.name != 'github-actions[bot]'
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        run: |
+          # Check if package.json exists in root
+          if [ -f "package.json" ]; then
+            # Bump patch version
+            npm version patch --no-git-tag-version
+            NEW_VERSION=$(node -p "require('./package.json').version")
+
+            # Also update admin packages if they exist
+            if [ -f "admin/server/package.json" ]; then
+              cd admin/server
+              npm version $NEW_VERSION --no-git-tag-version --allow-same-version
+              cd ../..
+            fi
+
+            if [ -f "admin/client/package.json" ]; then
+              cd admin/client
+              npm version $NEW_VERSION --no-git-tag-version --allow-same-version
+              cd ../..
+            fi
+
+            # Commit and push
+            git add -A
+            git commit -m "chore: bump version to v${NEW_VERSION} [skip ci]"
+            git push
+
+            echo "Bumped version to v${NEW_VERSION}"
+          else
+            echo "No package.json found, skipping version bump"
+          fi
