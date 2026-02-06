@@ -385,11 +385,13 @@ clear_session_project() {
 
 # Run tasks one by one from TASKS.md
 # Uses --continue within the same project for efficiency, fresh sessions across projects
+# Posts a progress comment every 25 tasks completed
 run_tasks_from_file() {
     local work_dir="$1"
-    local max_tasks="${2:-50}"
+    local issue_number="$2"
     local tasks_done=0
     local first_task=true
+    local checkpoint_interval=25
 
     cd "$work_dir" || return 1
 
@@ -403,7 +405,7 @@ run_tasks_from_file() {
         set_session_project "$work_dir"
     fi
 
-    while [[ $tasks_done -lt $max_tasks ]]; do
+    while true; do
         # Get next uncompleted task
         local task=$(get_next_task "$work_dir")
 
@@ -495,10 +497,16 @@ Only work on THIS task." 2>&1 | tee "$task_output"
             # Try one more time to mark it
             sleep 2
         fi
-    done
 
-    echo "Reached max tasks limit ($max_tasks)"
-    return 1
+        # Post progress comment every checkpoint_interval tasks
+        if [[ -n "$issue_number" ]] && [[ $((tasks_done % checkpoint_interval)) -eq 0 ]]; then
+            local checkpoint_progress=$(get_task_progress "$work_dir")
+            gh issue comment "$issue_number" -R "$GITHUB_TASKS_REPO" \
+                --body "📊 **Progress checkpoint** ($checkpoint_progress)
+
+$tasks_done tasks processed so far. Continuing..." 2>/dev/null || true
+        fi
+    done
 }
 
 # Issue-scoped session tracking to prevent cross-issue contamination
@@ -706,7 +714,7 @@ Starting implementation..." 2>/dev/null
             echo "------- Task Loop Output -------"
             local loop_output_file=$(mktemp)
 
-            run_tasks_from_file "$work_dir" 50 2>&1 | tee "$loop_output_file"
+            run_tasks_from_file "$work_dir" "$issue_number" 2>&1 | tee "$loop_output_file"
 
             local loop_result=$(cat "$loop_output_file")
             rm -f "$loop_output_file"
