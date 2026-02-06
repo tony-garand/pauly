@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType } from "express";
 import { execFileSync } from "child_process";
 import { getPaulyStatus, getSanitizedConfig, getLogContent, getAvailableLogs, PAULY_DIR } from "../lib/pauly.js";
-import { updateConfigValue, deleteConfigValue } from "../lib/config.js";
+import { updateConfigValue, deleteConfigValue, getConfigValue } from "../lib/config.js";
 import { killAllClaudeProcesses } from "../lib/projects.js";
 
 const router: RouterType = Router();
@@ -98,6 +98,57 @@ router.post("/git-pull", (_req, res) => {
     const error = err as Error & { stderr?: string };
     res.status(500).json({
       error: error.stderr || error.message || "Git pull failed"
+    });
+  }
+});
+
+// Create an internal task (GitHub Issue with pauly label)
+router.post("/tasks", (req, res) => {
+  const { title, body } = req.body;
+
+  if (!title || typeof title !== "string" || !title.trim()) {
+    res.status(400).json({ error: "Task title is required" });
+    return;
+  }
+
+  const repo = getConfigValue("GITHUB_TASKS_REPO");
+  if (!repo) {
+    res.status(500).json({ error: "GITHUB_TASKS_REPO not configured" });
+    return;
+  }
+
+  const label = getConfigValue("GITHUB_TASKS_LABEL") || "pauly";
+
+  try {
+    const args = [
+      "issue", "create",
+      "-R", repo,
+      "--title", title.trim(),
+      "--label", label,
+    ];
+
+    if (body && typeof body === "string" && body.trim()) {
+      args.push("--body", body.trim());
+    }
+
+    const output = execFileSync("gh", args, {
+      encoding: "utf-8",
+      timeout: 15000,
+    });
+
+    // gh issue create outputs the issue URL
+    const issueUrl = output.trim();
+    const issueNumber = issueUrl.match(/\/(\d+)$/)?.[1];
+
+    res.json({
+      success: true,
+      issueUrl,
+      issueNumber: issueNumber ? parseInt(issueNumber, 10) : undefined,
+    });
+  } catch (err) {
+    const error = err as Error & { stderr?: string };
+    res.status(500).json({
+      error: error.stderr || error.message || "Failed to create task",
     });
   }
 });
