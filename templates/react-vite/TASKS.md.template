@@ -1,0 +1,18 @@
+# {{PROJECT_NAME}} - Tasks
+
+## Setup
+- [ ] Initialize Vite project with React and TypeScript
+- [ ] Install and configure Tailwind CSS
+- [ ] Set up shadcn/ui with base components
+- [ ] Configure ESLint and Prettier
+- [ ] Set up project directory structure
+
+## Core Features
+- [ ] Create main layout component
+- [ ] Implement navigation/routing
+- [ ] Add theme toggle (dark/light mode)
+- [ ] Create reusable form components
+- [ ] Set up error boundary
+
+## Additional Features
+<!-- Add project-specific features here -->

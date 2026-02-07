@@ -303,6 +303,10 @@ export interface DevJobStatus {
   status: "idle" | "running" | "success" | "error";
   startedAt?: string;
   log?: string;
+  iteration?: {
+    current: number;
+    max: number;
+  };
   error?: DevError;
 }
 

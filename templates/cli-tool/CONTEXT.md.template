@@ -1,0 +1,38 @@
+# {{PROJECT_NAME}}
+
+## Overview
+Command-line tool built with Commander.js and TypeScript.
+
+## Tech Stack
+- **CLI Framework:** Commander.js
+- **Language:** TypeScript
+- **Runtime:** Node.js 20+
+- **Package Manager:** pnpm
+
+## Project Structure
+```
+src/
+├── commands/       # Command implementations
+├── lib/            # Shared utilities
+├── types/          # TypeScript types
+└── index.ts        # CLI entry point
+```
+
+## Commands
+- `pnpm dev` - Run CLI in development mode
+- `pnpm build` - Compile TypeScript
+- `pnpm link` - Install globally for testing
+- `pnpm test` - Run tests
+
+## CLI Usage
+```bash
+{{PROJECT_NAME}} --help           # Show help
+{{PROJECT_NAME}} --version        # Show version
+{{PROJECT_NAME}} <command> [opts] # Run a command
+```
+
+## Development Notes
+- Each command is a separate file in commands/
+- Use chalk for colored output
+- Use ora for spinners
+- Interactive prompts with inquirer

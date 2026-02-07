@@ -700,6 +700,62 @@ export function cloneGitHubRepo(url: string, name?: string): CloneResult {
   }
 }
 
+// Error suggestions mapping for common errors
+export const errorSuggestions: Record<string, { pattern: RegExp; suggestion: string; action?: string }[]> = {
+  common: [
+    { pattern: /ENOENT/i, suggestion: "File or directory not found. Check if the path exists.", action: "ls -la" },
+    { pattern: /EACCES|permission denied/i, suggestion: "Permission denied. Check file permissions.", action: "chmod +x" },
+    { pattern: /ECONNREFUSED/i, suggestion: "Connection refused. Is the server running?", action: "Check service status" },
+    { pattern: /ETIMEDOUT|timeout/i, suggestion: "Operation timed out. Check network or increase timeout." },
+    { pattern: /rate limit/i, suggestion: "API rate limit reached. Wait before retrying.", action: "Wait 60 seconds" },
+    { pattern: /session limit/i, suggestion: "Claude session limit reached. Wait or restart session.", action: "pauly kill && pauly dev" },
+    { pattern: /out of memory|heap/i, suggestion: "Out of memory. Close other applications or increase Node memory.", action: "NODE_OPTIONS='--max-old-space-size=4096'" },
+    { pattern: /git.*conflict/i, suggestion: "Git merge conflict detected. Resolve conflicts manually.", action: "git status" },
+    { pattern: /npm ERR!|pnpm ERR!/i, suggestion: "Package manager error. Try clearing cache and reinstalling.", action: "rm -rf node_modules && pnpm install" },
+    { pattern: /cannot find module/i, suggestion: "Missing dependency. Try reinstalling packages.", action: "pnpm install" },
+    { pattern: /EADDRINUSE/i, suggestion: "Port already in use. Kill the process using it.", action: "lsof -i :PORT" },
+    { pattern: /authentication|unauthorized|401/i, suggestion: "Authentication failed. Check credentials or re-login.", action: "gh auth login" },
+    { pattern: /not found.*command|command not found/i, suggestion: "Command not found. Make sure the CLI tool is installed.", action: "Check PATH" },
+  ],
+  dev: [
+    { pattern: /syntax error/i, suggestion: "Syntax error in code. Check the file at the indicated line." },
+    { pattern: /type.*not assignable/i, suggestion: "TypeScript type error. Check type definitions." },
+    { pattern: /cannot read propert|undefined/i, suggestion: "Null/undefined access. Add null checks to the code." },
+    { pattern: /FAIL.*\.test\./i, suggestion: "Test failure. Check test output for details." },
+    { pattern: /build failed|compilation error/i, suggestion: "Build failed. Check for syntax or type errors." },
+    { pattern: /eslint|prettier/i, suggestion: "Linting error. Run formatter to fix.", action: "pnpm lint --fix" },
+  ],
+  railway: [
+    { pattern: /deploy.*failed/i, suggestion: "Deployment failed. Check Railway logs for details.", action: "railway logs" },
+    { pattern: /not linked/i, suggestion: "Project not linked to Railway. Link it first.", action: "railway link" },
+    { pattern: /no.*service/i, suggestion: "No Railway service found. Create one in the dashboard." },
+  ]
+};
+
+/**
+ * Get error suggestions for a given error message
+ */
+export function getErrorSuggestion(errorMessage: string, context: "common" | "dev" | "railway" = "common"): { suggestion: string; action?: string } | undefined {
+  // Check context-specific patterns first
+  const contextPatterns = errorSuggestions[context] || [];
+  for (const { pattern, suggestion, action } of contextPatterns) {
+    if (pattern.test(errorMessage)) {
+      return { suggestion, action };
+    }
+  }
+
+  // Fall back to common patterns
+  if (context !== "common") {
+    for (const { pattern, suggestion, action } of errorSuggestions.common) {
+      if (pattern.test(errorMessage)) {
+        return { suggestion, action };
+      }
+    }
+  }
+
+  return undefined;
+}
+
 // Issue processing jobs
 const issueJobs = new Map<string, { status: "running" | "success" | "error"; output: string; tasks?: string[] }>();
 
@@ -712,6 +768,10 @@ interface DevJobStatus {
   status: "idle" | "running" | "success" | "error";
   startedAt?: string;
   log?: string;
+  iteration?: {
+    current: number;
+    max: number;
+  };
   error?: {
     phase: string;
     message: string;
@@ -723,6 +783,33 @@ interface DevJobStatus {
 
 function getDevLogPath(projectName: string): string {
   return join(homedir(), ".pauly", "logs", `dev-${projectName}.log`);
+}
+
+function parseIterationCount(log: string): DevJobStatus["iteration"] | undefined {
+  // Look for patterns like "Iteration 3/25" or "[3/25]" or "attempt 2 of 5"
+  const patterns = [
+    /iteration\s+(\d+)\s*[\/of]+\s*(\d+)/i,
+    /\[(\d+)\/(\d+)\]/,
+    /attempt\s+(\d+)\s*(?:of|\/)\s*(\d+)/i,
+    /loop\s+(\d+)\s*(?:of|\/)\s*(\d+)/i,
+    /run\s+(\d+)\s*(?:of|\/)\s*(\d+)/i,
+  ];
+
+  // Check from the end of the log for the most recent iteration
+  const lines = log.split("\n").reverse();
+  for (const line of lines) {
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match) {
+        return {
+          current: parseInt(match[1], 10),
+          max: parseInt(match[2], 10),
+        };
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function parseDevErrors(log: string): DevJobStatus["error"] | undefined {
@@ -814,17 +901,20 @@ export function getDevJobStatus(projectName: string): DevJobStatus {
     if (psOutput) {
       // Process is running - read current log
       let log = "";
+      let fullLog = "";
       if (existsSync(logPath)) {
-        log = readFileSync(logPath, "utf-8");
+        fullLog = readFileSync(logPath, "utf-8");
         // Get last 100 lines for display
-        const lines = log.split("\n");
+        const lines = fullLog.split("\n");
         log = lines.slice(-100).join("\n");
       }
 
       const error = parseDevErrors(log);
+      const iteration = parseIterationCount(fullLog);
       return {
         status: error ? "error" : "running",
         log,
+        iteration,
         error
       };
     }

@@ -15,6 +15,9 @@ MAX_RETRIES=5
 RETRY_DELAY=10
 SESSION_WAIT=300  # 5 minutes wait on session limits
 
+# Dry-run mode (set by --dry-run flag)
+DEV_DRY_RUN=false
+
 # Ensure directories exist
 ensure_dev_dirs() {
     mkdir -p "$DEV_DIR" "$DEV_LOG_DIR" "$DEV_TASK_DIR"
@@ -107,6 +110,18 @@ run_claude_dev() {
     local attempt=1
     local output=""
     local exit_code=0
+
+    # Dry-run mode - print what would be done without executing
+    if [[ "$DEV_DRY_RUN" == "true" ]]; then
+        ts_echo "${YELLOW}[DRY-RUN]${NC} Would run $phase"
+        echo ""
+        echo -e "${CYAN}--- Prompt Preview ---${NC}"
+        echo "${prompt:0:500}..."  # Show first 500 chars
+        echo -e "${CYAN}--- End Preview ---${NC}"
+        echo ""
+        dev_log "INFO" "[DRY-RUN] Skipped $phase"
+        return 0
+    fi
 
     # Build continue flag
     local continue_flag=""
@@ -325,12 +340,63 @@ FIX_EOF
 # COMMANDS
 #------------------------------------------------------------------------------
 
-# Initialize project from idea file
+# Initialize project from idea file or template
 dev_init() {
     local idea_file="$1"
+    local template_name="$2"
+
+    # Handle template initialization
+    if [[ -n "$template_name" ]]; then
+        # Source templates.sh if not already loaded
+        local templates_lib="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/lib/templates.sh"
+        if [[ -f "$templates_lib" ]]; then
+            source "$templates_lib"
+        else
+            ts_echo "${RED}Error: Template system not found${NC}"
+            return 1
+        fi
+
+        if [[ "$template_name" == "list" ]]; then
+            list_templates
+            return 0
+        fi
+
+        # Get project name from idea file or default
+        local project_name
+        if [[ -n "$idea_file" && -f "$idea_file" ]]; then
+            project_name=$(head -1 "$idea_file" | sed 's/^#*\s*//' | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd '[:alnum:]-')
+        else
+            project_name=$(basename "$(pwd)")
+        fi
+
+        ts_echo "${GREEN}Initializing project from template: $template_name${NC}"
+        init_from_template "$template_name" "." "$project_name"
+
+        # If we have an idea file, enhance the generated files
+        if [[ -n "$idea_file" && -f "$idea_file" ]]; then
+            ts_echo "${GREEN}Enhancing with idea content...${NC}"
+            local idea_content=$(cat "$idea_file")
+            local enhance_prompt="You have template-generated CONTEXT.md and TASKS.md files.
+
+Read the idea file and ENHANCE the existing files:
+1. Update CONTEXT.md with project-specific details from the idea
+2. Add project-specific tasks to TASKS.md
+
+Do NOT overwrite the template structure - ADD to it.
+
+## Idea File Content:
+$idea_content"
+            run_claude_dev "$enhance_prompt" "enhance"
+        fi
+
+        ts_echo "${GREEN}Project initialized from template! Run 'pauly dev' to start building.${NC}"
+        return 0
+    fi
 
     if [[ ! -f "$idea_file" ]]; then
         ts_echo "${RED}Error: Idea file '$idea_file' not found${NC}"
+        ts_echo "Usage: pauly dev init <idea.md> [--template <name>]"
+        ts_echo "       pauly dev init --template list"
         return 1
     fi
 
@@ -479,6 +545,12 @@ dev_loop() {
     local max_iterations="${1:-25}"
     local iteration=1
     local start_time=$(date +%s)
+
+    if [[ "$DEV_DRY_RUN" == "true" ]]; then
+        ts_echo "${YELLOW}=== DRY-RUN MODE ===${NC}"
+        ts_echo "No changes will be made. Previewing what would happen."
+        echo ""
+    fi
 
     ts_echo "${GREEN}Starting development loop (max $max_iterations iterations)${NC}"
     ts_echo "${CYAN}Loop: PLAN -> EXECUTE -> REVIEW -> FIX${NC}"

@@ -1,0 +1,18 @@
+{
+  "name": "cli-tool",
+  "description": "CLI tool with Commander.js and TypeScript",
+  "variables": {
+    "PROJECT_NAME": "Project name",
+    "PROJECT_DESCRIPTION": "Brief project description",
+    "CLI_COMMAND": "Command name to invoke the CLI"
+  },
+  "dependencies": {
+    "node": ">=20.0.0"
+  },
+  "nextSteps": [
+    "cd {{PROJECT_NAME}} && pnpm install",
+    "pnpm build to compile",
+    "pnpm link to install globally",
+    "Run '{{PROJECT_NAME}} --help' to test"
+  ]
+}

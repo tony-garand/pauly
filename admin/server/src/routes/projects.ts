@@ -3,11 +3,48 @@ import { listProjects, getProjectDetail, addTask, toggleTask, deleteTask, reorde
 
 const router: RouterType = Router();
 
+/**
+ * @openapi
+ * /projects:
+ *   get:
+ *     tags: [Projects]
+ *     summary: List all projects
+ *     responses:
+ *       200:
+ *         description: List of projects
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 projects:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Project'
+ */
 router.get("/", (_req, res) => {
   const projects = listProjects();
   res.json({ projects });
 });
 
+/**
+ * @openapi
+ * /projects/{name}:
+ *   get:
+ *     tags: [Projects]
+ *     summary: Get project details
+ *     parameters:
+ *       - name: name
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Project details
+ *       404:
+ *         description: Project not found
+ */
 router.get("/:name", (req, res) => {
   const { name } = req.params;
   const project = getProjectDetail(name);
@@ -20,7 +57,25 @@ router.get("/:name", (req, res) => {
   res.json({ project });
 });
 
-// Delete a project (removes local directory only, not GitHub repo)
+/**
+ * @openapi
+ * /projects/{name}:
+ *   delete:
+ *     tags: [Projects]
+ *     summary: Delete a project
+ *     description: Removes local project directory (not GitHub repo)
+ *     parameters:
+ *       - name: name
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Project deleted
+ *       404:
+ *         description: Project not found
+ */
 router.delete("/:name", (req, res) => {
   const { name } = req.params;
   const result = deleteProject(name);
@@ -33,7 +88,34 @@ router.delete("/:name", (req, res) => {
   res.json({ success: true });
 });
 
-// Import a GitHub repository
+/**
+ * @openapi
+ * /projects/import:
+ *   post:
+ *     tags: [Projects]
+ *     summary: Import a GitHub repository
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [url]
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: GitHub repository URL
+ *               name:
+ *                 type: string
+ *                 description: Optional local directory name
+ *     responses:
+ *       201:
+ *         description: Repository imported
+ *       400:
+ *         description: Invalid request
+ *       409:
+ *         description: Project already exists
+ */
 router.post("/import", (req, res) => {
   const { url, name } = req.body;
 

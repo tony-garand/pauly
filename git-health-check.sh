@@ -17,6 +17,7 @@ main() {
     local issues_found=0
     local repos_checked=0
     local repos_pulled=0
+    local repos_pushed=0
 
     # Find all git repositories
     while IFS= read -r git_dir; do
@@ -35,11 +36,36 @@ main() {
             issues_found=$((issues_found + 1))
         fi
 
-        # Check for unpushed commits
+        # Check for unpushed commits and auto-push or open PR
         local unpushed=$(git log @{u}..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
         if [ "$unpushed" -gt 0 ]; then
-            repo_issues+="  - $unpushed unpushed commits\n"
-            issues_found=$((issues_found + 1))
+            local current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+            log "Attempting to push $unpushed commits for $repo_name ($current_branch)..."
+            if git push 2>/dev/null; then
+                repo_issues+="  - ✅ Pushed $unpushed commits ($current_branch)\n"
+                repos_pushed=$((repos_pushed + 1))
+            else
+                # Push failed - create a PR if gh is available
+                if ensure_gh; then
+                    local pr_branch="auto-push/${current_branch}-$(date '+%Y%m%d')"
+                    git checkout -b "$pr_branch" 2>/dev/null
+                    if git push -u origin "$pr_branch" 2>/dev/null; then
+                        local main_branch_name=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+                        [ -z "$main_branch_name" ] && main_branch_name="main"
+                        local pr_url=$(gh pr create --title "Auto-push: $unpushed commits from $current_branch" \
+                            --body "Automated PR created by git-health-check because direct push to \`$current_branch\` failed (likely due to merge conflicts)." \
+                            --base "$main_branch_name" 2>/dev/null)
+                        repo_issues+="  - ⚠️ Push failed, opened PR: $pr_url\n"
+                    else
+                        repo_issues+="  - ❌ Push failed and could not create PR branch\n"
+                        issues_found=$((issues_found + 1))
+                    fi
+                    git checkout "$current_branch" 2>/dev/null
+                else
+                    repo_issues+="  - ❌ $unpushed unpushed commits (push failed, gh CLI not available for PR)\n"
+                    issues_found=$((issues_found + 1))
+                fi
+            fi
         fi
 
         # Check for stale branches (no commits in 30+ days)
@@ -93,6 +119,7 @@ main() {
 ========================================
 Repositories scanned: $repos_checked
 Repositories pulled: $repos_pulled
+Repositories pushed: $repos_pushed
 Issues found: $issues_found
 "
 
@@ -116,7 +143,7 @@ $summary" 2>/dev/null)
     # Send email
     send_email "Git Health Check - $issues_found issues" "$(echo -e "$summary")"
 
-    log "Git Health Check complete. $repos_checked repos scanned, $repos_pulled pulled, $issues_found issues found."
+    log "Git Health Check complete. $repos_checked repos scanned, $repos_pulled pulled, $repos_pushed pushed, $issues_found issues found."
 }
 
 run_with_alerts "git-health-check" main

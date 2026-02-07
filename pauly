@@ -16,6 +16,7 @@ source "$SCRIPT_DIR/lib/common.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/dev.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/autofix.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/railway.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/lib/queue.sh" 2>/dev/null || true
 
 VERSION="1.0.0"
 CRON_MARKER="# pauly-job"
@@ -68,19 +69,25 @@ cmd_help() {
     echo -e "  ${BOLD}admin${NC} [cmd]      Manage admin dashboard (start/stop/status)"
     echo -e "  ${BOLD}railway${NC} [cmd]    Railway deployment commands"
     echo -e "  ${BOLD}status${NC}           Show status of all scheduled jobs"
-    echo -e "  ${BOLD}logs${NC} [job]       View logs (optionally for specific job)"
+    echo -e "  ${BOLD}logs${NC} [-f] [job]  View logs (-f to follow in real-time)"
     echo -e "  ${BOLD}tail${NC} [job]       Follow logs in real-time"
     echo -e "  ${BOLD}enable${NC} <job>     Enable a scheduled job"
     echo -e "  ${BOLD}disable${NC} <job>    Disable a scheduled job"
     echo -e "  ${BOLD}test-email${NC}       Send a test email"
     echo -e "  ${BOLD}setup${NC}            Run the Mac Mini setup script"
+    echo -e "  ${BOLD}install${NC}          Install all npm dependencies"
     echo -e "  ${BOLD}config${NC}           Configure settings interactively"
     echo -e "  ${BOLD}config show${NC}      Show current configuration"
+    echo -e "  ${BOLD}doctor${NC}           Run system health checks"
+    echo -e "  ${BOLD}completions${NC}      Show shell completion setup instructions"
     echo -e "  ${BOLD}autofix${NC}          Show auto-fix status"
     echo -e "  ${BOLD}autofix test${NC}     Test auto-fix with simulated failure"
     echo -e "  ${BOLD}autofix logs${NC}     View auto-fix logs"
+    echo -e "  ${BOLD}queue${NC}            Show task queue status"
+    echo -e "  ${BOLD}queue list${NC}       List jobs in queue"
+    echo -e "  ${BOLD}queue cleanup${NC}    Cleanup stale and old jobs"
     echo -e "  ${BOLD}kill${NC}             Stop all running Claude/dev processes"
-    echo -e "  ${BOLD}version${NC}          Show version"
+    echo -e "  ${BOLD}version${NC}          Show version (--check to check for updates)"
     echo -e "  ${BOLD}help${NC}             Show this help message"
     echo ""
     echo "Jobs:"
@@ -91,17 +98,27 @@ cmd_help() {
     echo "  all        Run all jobs sequentially"
     echo ""
     echo "Dev Commands:"
-    echo "  pauly dev [n]              Run n iterations of PLAN->EXECUTE->REVIEW->FIX"
-    echo "  pauly dev init <idea.md>   Bootstrap project from idea file"
-    echo "  pauly dev refresh <notes>  Add tasks from freeform notes"
-    echo "  pauly dev task \"desc\"      Run isolated single-task mode"
-    echo "  pauly dev status           Show development progress"
+    echo "  pauly dev [n]                        Run n iterations of PLAN->EXECUTE->REVIEW->FIX"
+    echo "  pauly dev init <idea.md>             Bootstrap project from idea file"
+    echo "  pauly dev init --template <name>     Bootstrap from template"
+    echo "  pauly dev init --template list       List available templates"
+    echo "  pauly dev refresh <notes>            Add tasks from freeform notes"
+    echo "  pauly dev task \"desc\"                Run isolated single-task mode"
+    echo "  pauly dev status                     Show development progress"
     echo ""
     echo "Dev Options:"
     echo "  -n <num>                   Max iterations (default 25)"
+    echo "  --dry-run                  Preview what would happen without executing"
+    echo "  --template, -t <name>      Use project template (init mode)"
     echo "  --branch <name>            Use custom branch name (task mode)"
     echo "  --no-pr                    Skip PR creation (task mode)"
     echo "  -f, --file <file>          Read task from file (task mode)"
+    echo ""
+    echo "Templates:"
+    echo "  react-vite    React 19 + Vite + Tailwind + shadcn/ui"
+    echo "  express-api   Express.js REST API with TypeScript"
+    echo "  fullstack     React frontend + Express backend"
+    echo "  cli-tool      CLI with Commander.js and TypeScript"
     echo ""
     echo "Options:"
     echo "  -bg, --background    Run in background (persists after SSH disconnect)"
@@ -115,7 +132,46 @@ cmd_help() {
 }
 
 cmd_version() {
+    local check_update="$1"
+
     echo "pauly v${VERSION}"
+
+    if [ "$check_update" = "--check" ] || [ "$check_update" = "-c" ]; then
+        echo ""
+        print_info "Checking for updates..."
+
+        # Check if gh CLI is available
+        if ! command -v gh &> /dev/null; then
+            print_warning "GitHub CLI (gh) not installed. Cannot check for updates."
+            echo "Install with: brew install gh"
+            return 1
+        fi
+
+        # Fetch latest release from GitHub
+        local latest_version
+        latest_version=$(gh api repos/tony-garand/pauly/releases/latest --jq '.tag_name' 2>/dev/null | sed 's/^v//')
+
+        if [ -z "$latest_version" ]; then
+            # Try checking tags if no releases
+            latest_version=$(gh api repos/tony-garand/pauly/tags --jq '.[0].name' 2>/dev/null | sed 's/^v//')
+        fi
+
+        if [ -z "$latest_version" ]; then
+            print_warning "Could not fetch latest version from GitHub."
+            return 1
+        fi
+
+        # Compare versions
+        if [ "$VERSION" = "$latest_version" ]; then
+            print_success "You're running the latest version!"
+        else
+            echo ""
+            print_warning "Update available: v${VERSION} → v${latest_version}"
+            echo ""
+            echo "To update, run:"
+            echo "  cd ~/.pauly && git pull"
+        fi
+    fi
 }
 
 cmd_status() {
@@ -375,13 +431,38 @@ cmd_tail() {
 }
 
 cmd_logs() {
-    local job="$1"
+    local job=""
+    local follow=false
+    local lines=100
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -f|--follow)
+                follow=true
+                shift
+                ;;
+            -n)
+                lines="$2"
+                shift 2
+                ;;
+            -*)
+                print_error "Unknown option: $1"
+                echo "Usage: pauly logs [-f] [-n lines] [job]"
+                exit 1
+                ;;
+            *)
+                job="$1"
+                shift
+                ;;
+        esac
+    done
+
     local log_file=""
 
     case "$job" in
-        summary|daily|"")
+        summary|daily)
             log_file="$SCRIPT_DIR/logs/daily-summary.log"
-            [ -z "$job" ] && log_file=""  # Show all if no job specified
             ;;
         git|health)
             log_file="$SCRIPT_DIR/logs/git-health-check.log"
@@ -390,42 +471,90 @@ cmd_logs() {
             log_file="$SCRIPT_DIR/logs/project-research.log"
             ;;
         tasks)
-            echo -e "${BOLD}Task Logs:${NC}"
-            echo ""
-            for task_log in "$SCRIPT_DIR/logs/github-tasks.log" "$SCRIPT_DIR/logs/email-tasks.log"; do
-                if [ -f "$task_log" ]; then
-                    echo -e "${CYAN}=== $(basename "$task_log") ===${NC}"
-                    tail -50 "$task_log"
-                    echo ""
-                fi
-            done
+            if [ "$follow" = true ]; then
+                print_info "Following task logs (Ctrl+C to stop)"
+                tail -f "$SCRIPT_DIR/logs/github-tasks.log" "$SCRIPT_DIR/logs/email-tasks.log" 2>/dev/null
+            else
+                echo -e "${BOLD}Task Logs:${NC}"
+                echo ""
+                for task_log in "$SCRIPT_DIR/logs/github-tasks.log" "$SCRIPT_DIR/logs/email-tasks.log"; do
+                    if [ -f "$task_log" ]; then
+                        echo -e "${CYAN}=== $(basename "$task_log") ===${NC}"
+                        tail -50 "$task_log"
+                        echo ""
+                    fi
+                done
+            fi
             return
             ;;
+        admin)
+            log_file="$SCRIPT_DIR/logs/admin.log"
+            ;;
+        autofix)
+            log_file="$SCRIPT_DIR/logs/autofix.log"
+            ;;
+        dev)
+            # Find most recent dev log
+            log_file=$(ls -t "$SCRIPT_DIR/logs"/dev-*.log 2>/dev/null | head -1)
+            if [ -z "$log_file" ]; then
+                print_warning "No dev logs found"
+                return
+            fi
+            ;;
+        background|bg)
+            log_file="$SCRIPT_DIR/logs/background.log"
+            ;;
+        "")
+            if [ "$follow" = true ]; then
+                # Follow all logs
+                print_info "Following all logs (Ctrl+C to stop)"
+                tail -f "$SCRIPT_DIR/logs"/*.log 2>/dev/null
+                return
+            else
+                # Show all logs
+                echo -e "${BOLD}All Logs:${NC}"
+                echo ""
+                for log in "$SCRIPT_DIR/logs"/*.log; do
+                    if [ -f "$log" ]; then
+                        echo -e "${CYAN}=== $(basename "$log") ===${NC}"
+                        tail -20 "$log"
+                        echo ""
+                    fi
+                done
+                return
+            fi
+            ;;
         *)
-            print_error "Unknown job: $job"
-            exit 1
+            # Try to find a matching log file
+            if [ -f "$SCRIPT_DIR/logs/${job}.log" ]; then
+                log_file="$SCRIPT_DIR/logs/${job}.log"
+            elif [ -f "$SCRIPT_DIR/logs/${job}-*.log" ]; then
+                log_file=$(ls "$SCRIPT_DIR/logs/${job}-"*.log 2>/dev/null | head -1)
+            else
+                print_error "Unknown job: $job"
+                echo ""
+                echo "Available logs:"
+                for log in "$SCRIPT_DIR/logs"/*.log; do
+                    [ -f "$log" ] && echo "  $(basename "$log" .log)"
+                done
+                exit 1
+            fi
             ;;
     esac
 
     if [ -n "$log_file" ]; then
         if [ -f "$log_file" ]; then
-            echo -e "${BOLD}Logs: $log_file${NC}"
-            echo ""
-            tail -100 "$log_file"
+            if [ "$follow" = true ]; then
+                print_info "Following $log_file (Ctrl+C to stop)"
+                tail -f "$log_file"
+            else
+                echo -e "${BOLD}Logs: $log_file${NC}"
+                echo ""
+                tail -"$lines" "$log_file"
+            fi
         else
             print_warning "No logs found at $log_file"
         fi
-    else
-        # Show all logs
-        echo -e "${BOLD}All Logs:${NC}"
-        echo ""
-        for log in "$SCRIPT_DIR/logs"/*.log; do
-            if [ -f "$log" ]; then
-                echo -e "${CYAN}=== $(basename "$log") ===${NC}"
-                tail -20 "$log"
-                echo ""
-            fi
-        done
     fi
 }
 
@@ -610,6 +739,297 @@ cmd_autofix() {
             exit 1
             ;;
     esac
+}
+
+cmd_queue() {
+    local subcommand="${1:-status}"
+
+    case "$subcommand" in
+        status|"")
+            print_header
+            echo -e "${BOLD}Task Queue Status:${NC}"
+            echo ""
+
+            if ! queue_enabled; then
+                print_warning "Queue is disabled. Enable with QUEUE_ENABLED=true in config."
+                return 0
+            fi
+
+            local stats=$(queue_status)
+            local pending=$(echo "$stats" | jq -r '.pending // 0')
+            local running=$(echo "$stats" | jq -r '.running // 0')
+            local completed=$(echo "$stats" | jq -r '.completed // 0')
+            local failed=$(echo "$stats" | jq -r '.failed // 0')
+
+            echo -e "  ${YELLOW}●${NC} Pending:   $pending"
+            echo -e "  ${BLUE}●${NC} Running:   $running"
+            echo -e "  ${GREEN}●${NC} Completed: $completed"
+            echo -e "  ${RED}●${NC} Failed:    $failed"
+
+            local by_type=$(echo "$stats" | jq -r '.byTaskType // []')
+            if [ "$by_type" != "[]" ]; then
+                echo ""
+                echo -e "${BOLD}Pending by type:${NC}"
+                echo "$by_type" | jq -r '.[] | "  \(.task_type): \(.count)"'
+            fi
+            ;;
+        list)
+            if ! queue_enabled; then
+                print_warning "Queue is disabled."
+                return 0
+            fi
+
+            local status="${2:-}"
+            local result=$(queue_list "$status" 20)
+            echo "$result" | jq -r '.jobs[] | "[\(.id)] \(.status) - \(.task_type) (\(.created_at))"' 2>/dev/null || echo "No jobs found."
+            ;;
+        cleanup)
+            if ! queue_enabled; then
+                print_warning "Queue is disabled."
+                return 0
+            fi
+
+            print_info "Cleaning up stale and old jobs..."
+            local result=$(queue_cleanup 60 30)
+            local stale=$(echo "$result" | jq -r '.staleReset // 0')
+            local old=$(echo "$result" | jq -r '.oldDeleted // 0')
+            print_success "Reset $stale stale jobs, deleted $old old jobs"
+            ;;
+        *)
+            print_error "Unknown queue command: $subcommand"
+            echo "Usage: pauly queue [status|list|cleanup]"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_completions() {
+    local shell="${1:-}"
+
+    case "$shell" in
+        bash)
+            echo "# Add this to your ~/.bashrc:"
+            echo "source ~/.pauly/completions/pauly.bash"
+            echo ""
+            echo "# Or run this command to add it now:"
+            echo "echo 'source ~/.pauly/completions/pauly.bash' >> ~/.bashrc && source ~/.bashrc"
+            ;;
+        zsh)
+            echo "# Add this to your ~/.zshrc:"
+            echo "source ~/.pauly/completions/pauly.zsh"
+            echo ""
+            echo "# Or run this command to add it now:"
+            echo "echo 'source ~/.pauly/completions/pauly.zsh' >> ~/.zshrc && source ~/.zshrc"
+            ;;
+        "")
+            # Auto-detect shell
+            local current_shell=$(basename "$SHELL")
+            if [ "$current_shell" = "zsh" ]; then
+                cmd_completions "zsh"
+            elif [ "$current_shell" = "bash" ]; then
+                cmd_completions "bash"
+            else
+                echo "Completions available for: bash, zsh"
+                echo ""
+                echo "Usage: pauly completions <shell>"
+                echo ""
+                echo "Example:"
+                echo "  pauly completions bash"
+                echo "  pauly completions zsh"
+            fi
+            ;;
+        *)
+            print_error "Unknown shell: $shell"
+            echo "Supported shells: bash, zsh"
+            exit 1
+            ;;
+    esac
+}
+
+cmd_doctor() {
+    print_header
+    echo -e "${BOLD}System Health Check${NC}"
+    echo ""
+
+    local all_ok=true
+    local warnings=0
+    local errors=0
+
+    # Helper functions for consistent output
+    check_pass() { echo -e "  ${GREEN}✓${NC} $1"; }
+    check_fail() { echo -e "  ${RED}✗${NC} $1"; ((errors++)); all_ok=false; }
+    check_warn() { echo -e "  ${YELLOW}!${NC} $1"; ((warnings++)); }
+    check_skip() { echo -e "  ${CYAN}○${NC} $1 (skipped)"; }
+
+    # Section: Dependencies
+    echo -e "${BOLD}Dependencies:${NC}"
+
+    # Check Claude CLI
+    if claude_path=$(check_cli "claude" "$HOME/.local/bin/claude" "/usr/local/bin/claude" "$HOME/.claude/local/claude"); then
+        local claude_ver=$(claude --version 2>/dev/null | head -1 || echo "unknown")
+        check_pass "claude CLI: $claude_ver"
+    else
+        check_fail "claude CLI not found - install from https://claude.ai/cli"
+    fi
+
+    # Check GitHub CLI
+    if gh_path=$(check_cli "gh" "/opt/homebrew/bin/gh" "/usr/local/bin/gh"); then
+        local gh_ver=$(gh --version 2>/dev/null | head -1 | awk '{print $3}' || echo "unknown")
+        check_pass "gh CLI: v$gh_ver"
+    else
+        check_fail "gh CLI not found - install with: brew install gh"
+    fi
+
+    # Check Git
+    if git_path=$(check_cli "git" "/opt/homebrew/bin/git" "/usr/local/bin/git"); then
+        local git_ver=$(git --version 2>/dev/null | awk '{print $3}' || echo "unknown")
+        check_pass "git: v$git_ver"
+    else
+        check_fail "git not found"
+    fi
+
+    # Check Node.js
+    if node_path=$(check_cli "node" "/opt/homebrew/bin/node" "/usr/local/bin/node"); then
+        local node_ver=$(node --version 2>/dev/null || echo "unknown")
+        check_pass "node: $node_ver"
+    else
+        check_warn "node not found - needed for admin dashboard"
+    fi
+
+    # Check pnpm
+    if pnpm_path=$(check_cli "pnpm" "/opt/homebrew/bin/pnpm" "/usr/local/bin/pnpm"); then
+        local pnpm_ver=$(pnpm --version 2>/dev/null || echo "unknown")
+        check_pass "pnpm: v$pnpm_ver"
+    else
+        check_warn "pnpm not found - run: npm install -g pnpm"
+    fi
+
+    # Check msmtp (for email)
+    if msmtp_path=$(check_cli "msmtp" "/opt/homebrew/bin/msmtp" "/usr/local/bin/msmtp"); then
+        check_pass "msmtp: installed"
+    else
+        check_warn "msmtp not found - needed for email alerts"
+    fi
+
+    # Check Railway CLI (optional)
+    if railway_path=$(check_cli "railway" "/opt/homebrew/bin/railway" "/usr/local/bin/railway"); then
+        local railway_ver=$(railway --version 2>/dev/null | head -1 || echo "unknown")
+        check_pass "railway CLI: $railway_ver"
+    else
+        check_skip "railway CLI - optional for deployments"
+    fi
+
+    echo ""
+
+    # Section: Configuration
+    echo -e "${BOLD}Configuration:${NC}"
+
+    if config_exists; then
+        check_pass "Config file: $CONFIG_FILE"
+    else
+        check_fail "Config file not found - run: pauly config"
+    fi
+
+    if [ -n "$EMAIL" ]; then
+        check_pass "Email: $EMAIL"
+    else
+        check_warn "Email not configured"
+    fi
+
+    if [ -n "$PROJECTS_DIR" ] && [ -d "$PROJECTS_DIR" ]; then
+        local project_count=$(find "$PROJECTS_DIR" -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+        check_pass "Projects directory: $PROJECTS_DIR ($((project_count - 1)) projects)"
+    else
+        check_fail "Projects directory not found: ${PROJECTS_DIR:-not set}"
+    fi
+
+    if [ -n "$GITHUB_TASKS_REPO" ]; then
+        check_pass "GitHub tasks repo: $GITHUB_TASKS_REPO"
+    else
+        check_skip "GitHub tasks repo - not configured"
+    fi
+
+    echo ""
+
+    # Section: Authentication
+    echo -e "${BOLD}Authentication:${NC}"
+
+    if check_gh_auth 2>/dev/null; then
+        local gh_user=$(gh api user --jq '.login' 2>/dev/null || echo "authenticated")
+        check_pass "GitHub: logged in as $gh_user"
+    else
+        check_fail "GitHub: not authenticated - run: gh auth login"
+    fi
+
+    if command -v railway &> /dev/null; then
+        if check_railway_auth 2>/dev/null; then
+            local railway_user=$(railway whoami 2>/dev/null | head -1 || echo "authenticated")
+            check_pass "Railway: $railway_user"
+        else
+            check_warn "Railway: not authenticated - run: railway login"
+        fi
+    fi
+
+    echo ""
+
+    # Section: Directories & Permissions
+    echo -e "${BOLD}Directories:${NC}"
+
+    if [ -d "$SCRIPT_DIR" ] && [ -w "$SCRIPT_DIR" ]; then
+        check_pass "Pauly directory: $SCRIPT_DIR"
+    else
+        check_fail "Pauly directory not writable: $SCRIPT_DIR"
+    fi
+
+    if [ -d "$SCRIPT_DIR/logs" ] && [ -w "$SCRIPT_DIR/logs" ]; then
+        local log_count=$(find "$SCRIPT_DIR/logs" -name "*.log" 2>/dev/null | wc -l | tr -d ' ')
+        check_pass "Logs directory: $SCRIPT_DIR/logs ($log_count log files)"
+    else
+        check_warn "Logs directory not writable - creating..."
+        mkdir -p "$SCRIPT_DIR/logs" 2>/dev/null && check_pass "Logs directory created" || check_fail "Could not create logs directory"
+    fi
+
+    echo ""
+
+    # Section: Admin Dashboard
+    echo -e "${BOLD}Admin Dashboard:${NC}"
+
+    if [ -d "$SCRIPT_DIR/admin/server/dist" ]; then
+        check_pass "Server build: ready"
+    else
+        check_warn "Server not built - run: cd $SCRIPT_DIR/admin && pnpm build"
+    fi
+
+    if [ -d "$SCRIPT_DIR/admin/client/dist" ]; then
+        check_pass "Client build: ready"
+    else
+        check_warn "Client not built - run: cd $SCRIPT_DIR/admin && pnpm build"
+    fi
+
+    if [ -f "$SCRIPT_DIR/logs/admin.pid" ]; then
+        local admin_pid=$(cat "$SCRIPT_DIR/logs/admin.pid")
+        if kill -0 "$admin_pid" 2>/dev/null; then
+            check_pass "Dashboard running: PID $admin_pid (http://localhost:${ADMIN_PORT:-3001})"
+        else
+            check_warn "Dashboard has stale PID file"
+        fi
+    else
+        check_skip "Dashboard not running"
+    fi
+
+    echo ""
+
+    # Summary
+    echo -e "${BOLD}Summary:${NC}"
+    if [ "$all_ok" = true ] && [ "$warnings" -eq 0 ]; then
+        echo -e "  ${GREEN}All checks passed!${NC}"
+    elif [ "$errors" -eq 0 ]; then
+        echo -e "  ${YELLOW}$warnings warning(s), no errors${NC}"
+    else
+        echo -e "  ${RED}$errors error(s), $warnings warning(s)${NC}"
+        echo ""
+        echo "Fix the errors above to ensure Pauly works correctly."
+    fi
 }
 
 cmd_admin() {
@@ -823,22 +1243,83 @@ cmd_railway() {
 cmd_dev() {
     ensure_claude_dev || exit 1
 
-    local subcommand="${1:-}"
-    shift 2>/dev/null || true
+    local subcommand=""
+    local dry_run=false
+    local max_iter=25
+
+    # Parse global dev flags first
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                dry_run=true
+                export DEV_DRY_RUN=true
+                shift
+                ;;
+            -n)
+                max_iter="$2"
+                shift 2
+                ;;
+            -*)
+                # Unknown flag, pass through
+                break
+                ;;
+            *)
+                subcommand="$1"
+                shift
+                break
+                ;;
+        esac
+    done
 
     case "$subcommand" in
         init)
-            local idea_file="${1:-}"
-            if [[ -z "$idea_file" ]]; then
-                print_error "Please specify an idea file"
-                echo "Usage: pauly dev init <idea.md>"
+            local idea_file=""
+            local template_name=""
+
+            # Parse init arguments
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --template|-t) template_name="$2"; shift 2 ;;
+                    *) idea_file="$1"; shift ;;
+                esac
+            done
+
+            # If template is "list", just list templates
+            if [[ "$template_name" == "list" ]]; then
+                source "$SCRIPT_DIR/lib/templates.sh" 2>/dev/null && list_templates
+                exit 0
+            fi
+
+            # Need either idea file or template
+            if [[ -z "$idea_file" && -z "$template_name" ]]; then
+                print_error "Please specify an idea file or template"
+                echo "Usage: pauly dev init <idea.md> [--template <name>]"
+                echo "       pauly dev init --template <name>"
+                echo "       pauly dev init --template list"
                 exit 1
             fi
-            dev_init "$idea_file"
+            if [[ "$dry_run" = true ]]; then
+                print_info "[DRY-RUN] Would initialize project"
+                if [[ -n "$template_name" ]]; then
+                    echo "  Template: $template_name"
+                fi
+                if [[ -n "$idea_file" && -f "$idea_file" ]]; then
+                    echo "  Idea file: $idea_file"
+                    echo ""
+                    echo "Idea file contents:"
+                    head -20 "$idea_file"
+                fi
+                exit 0
+            fi
+            dev_init "$idea_file" "$template_name"
             ;;
 
         refresh)
             local notes_file="${1:-notes.md}"
+            if [[ "$dry_run" = true ]]; then
+                print_info "[DRY-RUN] Would refresh tasks from: $notes_file"
+                exit 0
+            fi
             dev_refresh "$notes_file"
             ;;
 
@@ -846,7 +1327,6 @@ cmd_dev() {
             local task_desc=""
             local branch_name=""
             local no_pr=false
-            local max_iter=25
             local task_file=""
 
             while [[ $# -gt 0 ]]; do
@@ -859,6 +1339,14 @@ cmd_dev() {
                 esac
             done
 
+            if [[ "$dry_run" = true ]]; then
+                print_info "[DRY-RUN] Would run task mode:"
+                echo "  Task: ${task_desc:-<from file>}"
+                echo "  Branch: ${branch_name:-<auto>}"
+                echo "  Max iterations: $max_iter"
+                echo "  Create PR: $([[ "$no_pr" = true ]] && echo "no" || echo "yes")"
+                exit 0
+            fi
             dev_task "$task_desc" "$branch_name" "$no_pr" "$max_iter" "$task_file"
             ;;
 
@@ -868,13 +1356,10 @@ cmd_dev() {
 
         ""|[0-9]*)
             # Default: run main loop
-            local max_iter="${subcommand:-25}"
-            if [[ "$max_iter" =~ ^[0-9]+$ ]]; then
-                dev_loop "$max_iter"
-            else
-                print_error "Invalid iteration count: $max_iter"
-                exit 1
+            if [[ -n "$subcommand" ]] && [[ "$subcommand" =~ ^[0-9]+$ ]]; then
+                max_iter="$subcommand"
             fi
+            dev_loop "$max_iter"
             ;;
 
         *)
@@ -947,6 +1432,72 @@ cmd_kill() {
     print_success "Dev logs cleared"
 }
 
+cmd_install() {
+    print_header
+    echo -e "${BOLD}Installing dependencies...${NC}"
+    echo ""
+
+    local failed=0
+
+    # Detect package manager
+    local pm="npm"
+    if command -v pnpm &> /dev/null; then
+        pm="pnpm"
+    elif command -v yarn &> /dev/null; then
+        pm="yarn"
+    fi
+
+    print_info "Using package manager: $pm"
+    echo ""
+
+    # Admin server
+    if [ -d "$SCRIPT_DIR/admin/server" ]; then
+        echo -e "${BOLD}[1/3] Admin Server${NC}"
+        if (cd "$SCRIPT_DIR/admin/server" && $pm install); then
+            print_success "Server dependencies installed"
+        else
+            print_error "Failed to install server dependencies"
+            ((failed++))
+        fi
+        echo ""
+    fi
+
+    # Admin client
+    if [ -d "$SCRIPT_DIR/admin/client" ]; then
+        echo -e "${BOLD}[2/3] Admin Client${NC}"
+        if (cd "$SCRIPT_DIR/admin/client" && $pm install); then
+            print_success "Client dependencies installed"
+        else
+            print_error "Failed to install client dependencies"
+            ((failed++))
+        fi
+        echo ""
+    fi
+
+    # Queue module
+    if [ -d "$SCRIPT_DIR/queue" ]; then
+        echo -e "${BOLD}[3/3] Queue Module${NC}"
+        if (cd "$SCRIPT_DIR/queue" && npm install); then
+            print_success "Queue dependencies installed"
+        else
+            print_error "Failed to install queue dependencies"
+            ((failed++))
+        fi
+        echo ""
+    fi
+
+    if [ $failed -eq 0 ]; then
+        print_success "All dependencies installed successfully!"
+        echo ""
+        echo "Next steps:"
+        echo "  pauly admin start   # Start the admin dashboard"
+        echo "  pauly doctor        # Check system health"
+    else
+        print_error "$failed package(s) failed to install"
+        return 1
+    fi
+}
+
 # ==========================================
 # Main
 # ==========================================
@@ -970,7 +1521,8 @@ case "${1:-help}" in
         cmd_status
         ;;
     logs|log)
-        cmd_logs "$2"
+        shift
+        cmd_logs "$@"
         ;;
     tail|follow)
         cmd_tail "$2"
@@ -987,17 +1539,29 @@ case "${1:-help}" in
     setup)
         cmd_setup
         ;;
+    install)
+        cmd_install
+        ;;
     config|configure)
         cmd_config "$2"
         ;;
     autofix|auto-fix)
         cmd_autofix "$2"
         ;;
+    queue)
+        cmd_queue "$2"
+        ;;
+    doctor|health|check)
+        cmd_doctor
+        ;;
+    completions|completion)
+        cmd_completions "$2"
+        ;;
     kill|killswitch|stop-all)
         cmd_kill
         ;;
     version|--version|-v)
-        cmd_version
+        cmd_version "$2"
         ;;
     help|--help|-h)
         cmd_help

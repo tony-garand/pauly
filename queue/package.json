@@ -1,0 +1,16 @@
+{
+  "name": "pauly-queue",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Task queue CLI for Pauly",
+  "main": "queue.js",
+  "bin": {
+    "pauly-queue": "./queue.js"
+  },
+  "scripts": {
+    "start": "node queue.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  }
+}

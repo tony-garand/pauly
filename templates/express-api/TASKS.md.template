@@ -1,0 +1,18 @@
+# {{PROJECT_NAME}} - Tasks
+
+## Setup
+- [ ] Initialize project with TypeScript
+- [ ] Set up Express.js with middleware
+- [ ] Configure ESLint and Prettier
+- [ ] Set up project directory structure
+- [ ] Add health check endpoint
+
+## Core Features
+- [ ] Implement CORS configuration
+- [ ] Add request logging middleware
+- [ ] Set up error handling middleware
+- [ ] Create base route structure
+- [ ] Add input validation
+
+## Additional Features
+<!-- Add project-specific features here -->

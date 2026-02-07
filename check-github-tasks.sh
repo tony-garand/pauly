@@ -5,6 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/queue.sh" 2>/dev/null || true
 
 # GitHub settings from config
 GITHUB_TASKS_REPO="${GITHUB_TASKS_REPO:-}"
@@ -355,6 +356,114 @@ get_project_lock_age() {
     else
         echo "0"
     fi
+}
+
+# ============================================================================
+# QUEUE-BASED TASK PROCESSING (optional - when QUEUE_ENABLED=true)
+# ============================================================================
+
+# Enqueue a GitHub issue as a job in the SQLite queue
+enqueue_github_issue() {
+    local issue_number="$1"
+    local title="$2"
+    local body="$3"
+    local labels="$4"
+    local project="$5"
+    local work_dir="$6"
+
+    if ! queue_enabled; then
+        return 1
+    fi
+
+    local task_data=$(jq -n \
+        --arg number "$issue_number" \
+        --arg title "$title" \
+        --arg body "$body" \
+        --arg labels "$labels" \
+        --arg project "$project" \
+        --arg workDir "$work_dir" \
+        '{
+            issueNumber: $number,
+            title: $title,
+            body: $body,
+            labels: $labels,
+            projectName: $project,
+            workDir: $workDir
+        }')
+
+    local result=$(queue_enqueue "github-issue" 0 "" "$task_data")
+    local job_id=$(echo "$result" | jq -r '.id // empty')
+
+    if [[ -n "$job_id" ]]; then
+        log "Enqueued issue #$issue_number as job #$job_id"
+        echo "$job_id"
+        return 0
+    fi
+
+    return 1
+}
+
+# Process jobs from the queue (worker loop)
+process_queue_jobs() {
+    if ! queue_enabled; then
+        return 1
+    fi
+
+    local worker_id=$(generate_worker_id)
+    log "Starting queue worker: $worker_id"
+
+    # Cleanup stale jobs first
+    queue_cleanup 60 30 >/dev/null 2>&1
+
+    # Process up to 10 jobs in one run
+    local jobs_processed=0
+    local max_jobs=10
+
+    while [[ $jobs_processed -lt $max_jobs ]]; do
+        local result=$(queue_dequeue "$worker_id")
+
+        if ! queue_acquired "$result"; then
+            log "No more jobs available"
+            break
+        fi
+
+        local job_id=$(queue_job_id "$result")
+        local task_type=$(queue_job_type "$result")
+        local task_data=$(queue_job_data "$result")
+
+        log "Processing job #$job_id ($task_type)"
+
+        local start_time=$(date +%s%3N)
+
+        case "$task_type" in
+            github-issue)
+                local issue_number=$(echo "$task_data" | jq -r '.issueNumber')
+                local title=$(echo "$task_data" | jq -r '.title')
+                local body=$(echo "$task_data" | jq -r '.body')
+                local labels=$(echo "$task_data" | jq -r '.labels')
+
+                if process_issue "$issue_number" "$title" "$body" "$labels"; then
+                    local end_time=$(date +%s%3N)
+                    local duration=$((end_time - start_time))
+                    queue_ack "$job_id" "$duration"
+                    log "Job #$job_id completed in ${duration}ms"
+                else
+                    local end_time=$(date +%s%3N)
+                    local duration=$((end_time - start_time))
+                    queue_nack "$job_id" "Issue processing failed" "false" "$duration"
+                    log "Job #$job_id failed"
+                fi
+                ;;
+            *)
+                queue_nack "$job_id" "Unknown task type: $task_type" "false"
+                log "Job #$job_id: unknown task type"
+                ;;
+        esac
+
+        ((jobs_processed++))
+    done
+
+    log "Queue worker finished: $jobs_processed jobs processed"
 }
 
 # Session tracking for project-scoped --continue
@@ -802,6 +911,57 @@ $todo_notification
 
 main() {
     log "Checking for GitHub tasks..."
+
+    # If queue is enabled, use queue-based processing
+    if queue_enabled; then
+        log "Queue mode enabled - using SQLite task queue"
+
+        # Check if configured
+        if ! github_tasks_configured; then
+            log "GitHub tasks not configured. Skipping."
+            return 0
+        fi
+
+        # Check gh auth
+        if ! gh auth status &>/dev/null; then
+            log_error "GitHub CLI not authenticated. Run 'gh auth login' first."
+            return 1
+        fi
+
+        ensure_claude || return 1
+
+        # First, enqueue any new issues
+        local issues=$(gh issue list -R "$GITHUB_TASKS_REPO" \
+            --label "$GITHUB_TASKS_LABEL" \
+            --state open \
+            --json number,title,body,labels \
+            --limit 10 2>/dev/null | \
+            jq -c "[.[] | select(.labels | map(.name) | index(\"$GITHUB_IN_PROGRESS_LABEL\") | not)]")
+
+        if [ -n "$issues" ] && [ "$issues" != "[]" ]; then
+            echo "$issues" | jq -c '.[]' | while read -r issue; do
+                local number=$(echo "$issue" | jq -r '.number')
+                local title=$(echo "$issue" | jq -r '.title')
+                local body=$(echo "$issue" | jq -r '.body')
+                local labels=$(echo "$issue" | jq -r '[.labels[].name] | join(",")')
+
+                # Mark as in-progress to prevent re-enqueueing
+                gh issue edit "$number" -R "$GITHUB_TASKS_REPO" \
+                    --add-label "$GITHUB_IN_PROGRESS_LABEL" 2>/dev/null
+
+                # Enqueue the issue
+                enqueue_github_issue "$number" "$title" "$body" "$labels" "" ""
+            done
+        fi
+
+        # Then process jobs from queue
+        process_queue_jobs
+
+        log "GitHub task check complete (queue mode)."
+        return 0
+    fi
+
+    # ---- File-based locking mode (legacy) ----
 
     # Clean up stale locks (older than 1 hour = probably crashed)
     local stale_threshold=3600

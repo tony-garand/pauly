@@ -1,0 +1,16 @@
+{
+  "name": "fullstack",
+  "description": "React frontend + Express backend monorepo",
+  "variables": {
+    "PROJECT_NAME": "Project name",
+    "PROJECT_DESCRIPTION": "Brief project description"
+  },
+  "dependencies": {
+    "node": ">=20.0.0"
+  },
+  "nextSteps": [
+    "cd {{PROJECT_NAME}} && pnpm install",
+    "pnpm dev to start both servers",
+    "Frontend at http://localhost:5173, API at http://localhost:3000"
+  ]
+}

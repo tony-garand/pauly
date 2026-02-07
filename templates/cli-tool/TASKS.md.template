@@ -1,0 +1,24 @@
+# {{PROJECT_NAME}} - Tasks
+
+## Setup
+- [ ] Initialize project with TypeScript
+- [ ] Set up Commander.js with base structure
+- [ ] Configure ESLint and Prettier
+- [ ] Set up bin entry in package.json
+- [ ] Add version and help commands
+
+## Core Features
+- [ ] Implement main command logic
+- [ ] Add colored output with chalk
+- [ ] Add spinner for long operations
+- [ ] Implement configuration file support
+- [ ] Add verbose/quiet flags
+
+## Polish
+- [ ] Add comprehensive --help text
+- [ ] Handle errors gracefully
+- [ ] Add shell completion support
+- [ ] Create README with usage examples
+
+## Additional Features
+<!-- Add project-specific features here -->

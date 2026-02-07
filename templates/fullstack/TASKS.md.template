@@ -1,0 +1,28 @@
+# {{PROJECT_NAME}} - Tasks
+
+## Setup
+- [ ] Initialize pnpm workspace
+- [ ] Set up React client with Vite
+- [ ] Set up Express server
+- [ ] Configure shared types directory
+- [ ] Set up Tailwind CSS and shadcn/ui
+
+## Backend
+- [ ] Create health check endpoint
+- [ ] Set up CORS for development
+- [ ] Add request validation middleware
+- [ ] Implement error handling
+
+## Frontend
+- [ ] Create main layout
+- [ ] Set up React Router
+- [ ] Add theme toggle
+- [ ] Create API client utilities
+
+## Integration
+- [ ] Configure Vite proxy for API
+- [ ] Set up shared TypeScript types
+- [ ] Create concurrent dev script
+
+## Additional Features
+<!-- Add project-specific features here -->

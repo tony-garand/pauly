@@ -8,6 +8,8 @@ import {
   Bot,
   Activity,
   Train,
+  AlertTriangle,
+  BarChart3,
 } from "lucide-react"
 
 import {
@@ -48,6 +50,16 @@ const systemItems = [
     title: "Status",
     url: "/status",
     icon: Activity,
+  },
+  {
+    title: "Metrics",
+    url: "/metrics",
+    icon: BarChart3,
+  },
+  {
+    title: "Dead Letter",
+    url: "/deadletter",
+    icon: AlertTriangle,
   },
   {
     title: "CLIs",

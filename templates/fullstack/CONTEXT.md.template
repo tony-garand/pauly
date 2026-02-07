@@ -1,0 +1,48 @@
+# {{PROJECT_NAME}}
+
+## Overview
+Fullstack application with React frontend and Express API backend.
+
+## Tech Stack
+### Frontend (client/)
+- **Framework:** React 19 + Vite
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Language:** TypeScript
+
+### Backend (server/)
+- **Framework:** Express.js
+- **Language:** TypeScript
+- **Runtime:** Node.js 20+
+
+## Project Structure
+```
+{{PROJECT_NAME}}/
+├── client/             # React frontend
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── hooks/
+│   │   └── lib/
+│   └── package.json
+├── server/             # Express backend
+│   ├── src/
+│   │   ├── routes/
+│   │   ├── middleware/
+│   │   └── lib/
+│   └── package.json
+├── shared/             # Shared types and utilities
+│   └── types/
+└── package.json        # Root workspace
+```
+
+## Commands
+- `pnpm dev` - Start both frontend and backend
+- `pnpm dev:client` - Start frontend only
+- `pnpm dev:server` - Start backend only
+- `pnpm build` - Build both for production
+- `pnpm test` - Run all tests
+
+## Development Notes
+- Shared types go in shared/ directory
+- API proxy configured in client Vite config
+- Use pnpm workspaces for dependencies

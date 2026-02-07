@@ -1,0 +1,39 @@
+# Pauly Configuration
+# Generated: 2024-01-01 00:00:00
+
+# Email for notifications and alerts
+EMAIL="test@example.com"
+
+# Directory to scan for git repos and projects
+PROJECTS_DIR="/tmp/test-projects"
+
+# Log rotation settings
+MAX_LOG_SIZE_MB=10
+MAX_LOG_FILES=5
+
+# Healthchecks.io ping URL (optional)
+HEALTHCHECK_URL=""
+
+# SMTP Configuration
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="test@example.com"
+SMTP_PASSWORD="test-password"
+
+# IMAP Configuration (for email tasks)
+IMAP_HOST="imap.gmail.com"
+IMAP_PORT=993
+ALLOWED_SENDERS=""
+
+# Dev Mode Configuration
+DEV_PROJECT_DIR=""
+
+# GitHub Tasks Configuration
+GITHUB_TASKS_REPO=""
+GITHUB_TASKS_LABEL="pauly"
+
+# Auto-Fix Configuration
+AUTOFIX_ENABLED="false"
+AUTOFIX_SCRIPTS="all"
+AUTOFIX_MAX_ATTEMPTS=1
+AUTOFIX_BRANCH_PREFIX="autofix"

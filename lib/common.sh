@@ -213,3 +213,65 @@ ensure_gh() {
 
     return 1
 }
+
+# ==========================================
+# Doctor Check Functions
+# ==========================================
+
+# Check if a CLI tool is installed and optionally get its version
+check_cli() {
+    local name="$1"
+    local paths=("${@:2}")
+
+    # First check if in PATH
+    if command -v "$name" &> /dev/null; then
+        echo "$(command -v "$name")"
+        return 0
+    fi
+
+    # Check common locations
+    for path in "${paths[@]}"; do
+        if [ -x "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# Check if a config value is set
+check_config_value() {
+    local key="$1"
+    local value
+    value=$(get_config_value "$key" 2>/dev/null)
+    [ -n "$value" ] && [ "$value" != "" ]
+}
+
+# Check if a directory exists and is writable
+check_directory() {
+    local dir="$1"
+    [ -d "$dir" ] && [ -w "$dir" ]
+}
+
+# Check if a file exists and is readable
+check_file() {
+    local file="$1"
+    [ -f "$file" ] && [ -r "$file" ]
+}
+
+# Check GitHub authentication status
+check_gh_auth() {
+    if ! command -v gh &> /dev/null; then
+        return 1
+    fi
+    gh auth status &> /dev/null
+}
+
+# Check Railway authentication status
+check_railway_auth() {
+    if ! command -v railway &> /dev/null; then
+        return 1
+    fi
+    railway whoami &> /dev/null 2>&1
+}

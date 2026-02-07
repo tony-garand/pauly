@@ -1,0 +1,36 @@
+# {{PROJECT_NAME}}
+
+## Overview
+REST API built with Express.js and TypeScript.
+
+## Tech Stack
+- **Framework:** Express.js
+- **Language:** TypeScript
+- **Runtime:** Node.js 20+
+- **Package Manager:** pnpm
+
+## Project Structure
+```
+src/
+├── routes/         # API route handlers
+├── middleware/     # Express middleware
+├── lib/            # Business logic and utilities
+├── types/          # TypeScript type definitions
+└── index.ts        # Application entry point
+```
+
+## Commands
+- `pnpm dev` - Start development server with hot reload
+- `pnpm build` - Compile TypeScript
+- `pnpm start` - Run production server
+- `pnpm test` - Run tests
+- `pnpm lint` - Run ESLint
+
+## API Endpoints
+<!-- Document API endpoints here -->
+
+## Development Notes
+- Use async/await for async operations
+- Validate request inputs at route level
+- Return consistent error responses
+- Keep business logic in lib/, routes should be thin

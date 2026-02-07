@@ -1,0 +1,36 @@
+# {{PROJECT_NAME}}
+
+## Overview
+React application built with Vite, TypeScript, Tailwind CSS, and shadcn/ui.
+
+## Tech Stack
+- **Framework:** React 19
+- **Build Tool:** Vite
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS + shadcn/ui
+- **Package Manager:** pnpm
+
+## Project Structure
+```
+src/
+├── components/     # Reusable UI components
+│   └── ui/         # shadcn/ui components
+├── pages/          # Page components
+├── hooks/          # Custom React hooks
+├── lib/            # Utility functions
+├── types/          # TypeScript types
+└── main.tsx        # Application entry point
+```
+
+## Commands
+- `pnpm dev` - Start development server
+- `pnpm build` - Build for production
+- `pnpm preview` - Preview production build
+- `pnpm lint` - Run ESLint
+- `pnpm test` - Run tests
+
+## Development Notes
+- Components follow atomic design principles
+- Use shadcn/ui for consistent UI components
+- State management via React hooks (useState, useContext)
+- API calls should use custom hooks in hooks/

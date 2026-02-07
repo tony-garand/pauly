@@ -1138,6 +1138,11 @@ export function ProjectDetail() {
                 <div className="flex items-center gap-2 text-sm text-primary animate-pulse flex-1">
                   <Sparkles className="h-4 w-4" />
                   <span>Claude is working on these tasks...</span>
+                  {devStatus.iteration && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Attempt {devStatus.iteration.current}/{devStatus.iteration.max}
+                    </Badge>
+                  )}
                 </div>
                 <Button
                   variant="outline"

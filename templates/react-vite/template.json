@@ -1,0 +1,16 @@
+{
+  "name": "react-vite",
+  "description": "React 19 + Vite + TypeScript + Tailwind CSS + shadcn/ui",
+  "variables": {
+    "PROJECT_NAME": "Project name",
+    "PROJECT_DESCRIPTION": "Brief project description"
+  },
+  "dependencies": {
+    "node": ">=20.0.0"
+  },
+  "nextSteps": [
+    "cd {{PROJECT_NAME}} && pnpm install",
+    "pnpm dev to start development server",
+    "pnpm build for production build"
+  ]
+}
