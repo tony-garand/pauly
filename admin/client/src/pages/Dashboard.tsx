@@ -17,15 +17,19 @@ import {
   CheckCircle2,
   XCircle,
   Activity,
+  Cpu,
 } from "lucide-react";
 import {
   fetchHealth,
   fetchClis,
   fetchProjects,
   fetchPaulyStatus,
+  fetchClaudeSessions,
+  killClaudeSession,
   type CliInfo,
   type ProjectInfo,
   type PaulyJob,
+  type ClaudeSessionsResponse,
 } from "@/lib/api";
 import { ClaudeTerminal } from "@/components/ClaudeTerminal";
 
@@ -34,6 +38,8 @@ export function Dashboard() {
   const [clis, setClis] = useState<CliInfo[]>([]);
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [jobs, setJobs] = useState<PaulyJob[]>([]);
+  const [sessions, setSessions] = useState<ClaudeSessionsResponse | null>(null);
+  const [killingPid, setKillingPid] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +68,31 @@ export function Dashboard() {
     loadData();
   }, [loadData]);
 
+  // Poll sessions every 10s — separate from loadData to avoid loading spinner
+  useEffect(() => {
+    const poll = () => {
+      fetchClaudeSessions().then(setSessions).catch(() => setSessions(null));
+    };
+    poll();
+    const interval = setInterval(poll, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleKillSession = async (pid: number) => {
+    setKillingPid(pid);
+    try {
+      await killClaudeSession(pid);
+      // Re-fetch sessions immediately after kill
+      const updated = await fetchClaudeSessions();
+      setSessions(updated);
+    } catch {
+      // Process may have already exited — refresh anyway
+      fetchClaudeSessions().then(setSessions).catch(() => setSessions(null));
+    } finally {
+      setKillingPid(null);
+    }
+  };
+
   if (loading) {
     return <Loading message="Loading dashboard..." />;
   }
@@ -69,6 +100,17 @@ export function Dashboard() {
   if (error) {
     return <ErrorDisplay message={error} onRetry={loadData} />;
   }
+
+  const sessionCount = sessions?.totalProcesses ?? 0;
+
+  const modeColors: Record<string, string> = {
+    plan: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+    execute: "bg-green-500/15 text-green-700 dark:text-green-400",
+    review: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+    fix: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
+    task: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400",
+    unknown: "bg-gray-500/15 text-gray-700 dark:text-gray-400",
+  };
 
   const installedClis = clis.filter((c) => c.installed).length;
   const totalClis = clis.length;
@@ -111,7 +153,7 @@ export function Dashboard() {
       <ClaudeTerminal />
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {/* Projects Card */}
         <Link to="/projects">
           <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
@@ -157,7 +199,78 @@ export function Dashboard() {
             </CardContent>
           </Card>
         </Link>
+
+        {/* Claude Sessions Card */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Claude Sessions</CardTitle>
+            <Cpu className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{sessionCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {sessionCount > 0
+                ? `${sessions!.groups.length} project${sessions!.groups.length !== 1 ? "s" : ""}`
+                : "No active sessions"}
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Running Claude Sessions */}
+      {sessions && sessions.totalProcesses > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Running Claude Sessions</CardTitle>
+            <CardDescription>
+              {sessions.totalProcesses} process{sessions.totalProcesses !== 1 ? "es" : ""} across{" "}
+              {sessions.groups.length} project{sessions.groups.length !== 1 ? "s" : ""}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {sessions.groups.map((group) => (
+                <div key={group.project} className="border-b pb-4 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <Link
+                      to={group.project !== "pauly" && group.project !== "other" ? `/projects/${group.project}` : "#"}
+                      className={group.project !== "pauly" && group.project !== "other" ? "hover:underline" : ""}
+                    >
+                      <span className="font-medium">{group.project}</span>
+                    </Link>
+                    <div className="flex gap-3 text-xs text-muted-foreground">
+                      <span>CPU: {group.totalCpu}%</span>
+                      <span>MEM: {group.totalMem}%</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {group.processes.map((proc) => (
+                      <div key={proc.pid} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${modeColors[proc.mode]}`}>
+                          {proc.mode}
+                        </span>
+                        <span className="text-muted-foreground text-xs">PID {proc.pid}</span>
+                        <span className="text-muted-foreground text-xs">{proc.uptime}</span>
+                        <span className="text-muted-foreground text-xs ml-auto">
+                          {proc.cpu}% / {proc.mem}%
+                        </span>
+                        <button
+                          onClick={() => handleKillSession(proc.pid)}
+                          disabled={killingPid === proc.pid}
+                          className="ml-2 p-0.5 rounded hover:bg-destructive/15 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                          title={`Kill process ${proc.pid}`}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Jobs List */}
       <Card>

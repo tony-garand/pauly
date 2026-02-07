@@ -3,6 +3,7 @@ import { execFileSync, spawn } from "child_process";
 import { getPaulyStatus, getSanitizedConfig, getLogContent, getAvailableLogs, PAULY_DIR } from "../lib/pauly.js";
 import { updateConfigValue, deleteConfigValue, getConfigValue } from "../lib/config.js";
 import { killAllClaudeProcesses } from "../lib/projects.js";
+import { getClaudeSessions, killClaudeSession } from "../lib/claude-sessions.js";
 
 const router: RouterType = Router();
 
@@ -65,6 +66,31 @@ router.get("/logs/:job", (req, res) => {
   }
 
   res.json({ log });
+});
+
+// Running Claude sessions
+router.get("/sessions", (_req, res) => {
+  try {
+    const sessions = getClaudeSessions();
+    res.json(sessions);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get Claude sessions" });
+  }
+});
+
+// Kill individual Claude session
+router.post("/sessions/:pid/kill", (req, res) => {
+  const pid = parseInt(req.params.pid, 10);
+  if (isNaN(pid) || pid <= 0) {
+    res.status(400).json({ error: "Invalid PID" });
+    return;
+  }
+  const result = killClaudeSession(pid);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
 });
 
 // Killswitch - stop all Claude processes

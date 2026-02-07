@@ -608,7 +608,7 @@ export function ProjectDetail() {
       </Link>
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <FolderGit2 className="h-6 w-6" />
@@ -1075,7 +1075,7 @@ export function ProjectDetail() {
                   : "No tasks yet"}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {totalTasks > 0 && (
                 <div className="text-right mr-4">
                   <p className="text-2xl font-bold">{percentage}%</p>
@@ -1115,7 +1115,7 @@ export function ProjectDetail() {
           )}
           {/* Archive suggestion when 100% complete */}
           {totalTasks > 0 && percentage === 100 && (
-            <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center justify-between">
+            <div className="mt-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                 <CheckCircle2 className="h-4 w-4" />
                 <span>All tasks complete! Archive to reduce context usage.</span>
@@ -1132,7 +1132,7 @@ export function ProjectDetail() {
             </div>
           )}
           {/* Dev controls */}
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {devStatus?.status === "running" ? (
               <>
                 <div className="flex items-center gap-2 text-sm text-primary animate-pulse flex-1">

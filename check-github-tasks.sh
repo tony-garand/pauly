@@ -808,6 +808,14 @@ Respond with what you did." 2>&1 | tee "$temp_output"
 
         echo "------- End Claude Output -------"
 
+        # Commit any changes from this step
+        if [[ -d .git ]] && [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+            echo "Committing changes..."
+            git add -A
+            git commit -m "feat: $title" 2>/dev/null || true
+            git push 2>/dev/null || git push -u origin "$(git branch --show-current)" 2>/dev/null || true
+        fi
+
         # Check if Claude created a TASKS.md with uncompleted tasks
         if has_uncompleted_tasks "$work_dir"; then
             log "TASKS.md found with uncompleted tasks - running task loop"

@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useLocation, Link } from "react-router-dom"
 import {
   LayoutDashboard,
@@ -24,6 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "./theme-toggle"
 
@@ -80,6 +82,11 @@ const systemItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
+  const { setOpenMobile } = useSidebar()
+
+  useEffect(() => {
+    setOpenMobile(false)
+  }, [location.pathname, setOpenMobile])
 
   return (
     <Sidebar collapsible="icon" {...props}>

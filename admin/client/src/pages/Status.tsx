@@ -189,65 +189,69 @@ export function Status() {
 
       {/* Git Pull Card */}
       <Card>
-        <CardContent className="flex items-center gap-4 py-4">
-          <GitBranch className="h-8 w-8 text-primary" />
+        <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-4 py-4">
+          <GitBranch className="h-8 w-8 text-primary shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium">Update Pauly</p>
             <p className="text-muted-foreground text-sm">
               Pull latest changes from remote repository
             </p>
           </div>
-          {pullResult && (
-            <Badge variant="outline" className={pullResult.updated ? "border-green-500 text-green-500" : ""}>
-              {pullResult.updated ? "Updated!" : "Already up to date"}
-            </Badge>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleGitPull}
-            disabled={pulling}
-            className="gap-2"
-          >
-            {pulling ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {pullResult && (
+              <Badge variant="outline" className={pullResult.updated ? "border-green-500 text-green-500" : ""}>
+                {pullResult.updated ? "Updated!" : "Already up to date"}
+              </Badge>
             )}
-            {pulling ? "Pulling..." : "Git Pull"}
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleGitPull}
+              disabled={pulling}
+              className="gap-2 w-full sm:w-auto"
+            >
+              {pulling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {pulling ? "Pulling..." : "Git Pull"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
       {/* Killswitch Card */}
       <Card className="border-destructive/50">
-        <CardContent className="flex items-center gap-4 py-4">
-          <Skull className="h-8 w-8 text-destructive" />
+        <CardContent className="flex flex-col sm:flex-row items-start sm:items-center gap-4 py-4">
+          <Skull className="h-8 w-8 text-destructive shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium">Emergency Killswitch</p>
             <p className="text-muted-foreground text-sm">
               Stop all running Claude and dev processes
             </p>
           </div>
-          {killResult && (
-            <Badge variant="outline" className="mr-2">
-              Killed {killResult.killed} process{killResult.killed !== 1 ? "es" : ""}
-            </Badge>
-          )}
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleKillAll}
-            disabled={killing}
-            className="gap-2"
-          >
-            {killing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Skull className="h-4 w-4" />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {killResult && (
+              <Badge variant="outline" className="mr-2">
+                Killed {killResult.killed} process{killResult.killed !== 1 ? "es" : ""}
+              </Badge>
             )}
-            {killing ? "Stopping..." : "Kill All"}
-          </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleKillAll}
+              disabled={killing}
+              className="gap-2 w-full sm:w-auto"
+            >
+              {killing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Skull className="h-4 w-4" />
+              )}
+              {killing ? "Stopping..." : "Kill All"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -374,12 +378,12 @@ export function Status() {
         <CardContent>
           {/* Add new config form */}
           {showAddForm && (
-            <div className="flex items-center gap-2 mb-4 p-3 bg-muted/50 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4 p-3 bg-muted/50 rounded-lg">
               <Input
                 placeholder="KEY_NAME"
                 value={newKey}
                 onChange={(e) => setNewKey(e.target.value.toUpperCase())}
-                className="w-48 font-mono text-sm"
+                className="sm:w-48 font-mono text-sm"
               />
               <Input
                 placeholder="value"
@@ -387,20 +391,22 @@ export function Status() {
                 onChange={(e) => setNewValue(e.target.value)}
                 className="flex-1 font-mono text-sm"
               />
-              <Button size="sm" onClick={handleAdd} disabled={!newKey.trim()}>
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setShowAddForm(false);
-                  setNewKey("");
-                  setNewValue("");
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={handleAdd} disabled={!newKey.trim()}>
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setNewKey("");
+                    setNewValue("");
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
 
@@ -409,13 +415,13 @@ export function Status() {
               {Object.entries(config).map(([key, value]) => (
                 <div
                   key={key}
-                  className="flex items-center gap-4 py-2 border-b last:border-0"
+                  className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 py-2 border-b last:border-0"
                 >
-                  <code className="text-sm font-medium min-w-[200px]">
+                  <code className="text-sm font-medium shrink-0">
                     {key}
                   </code>
                   {editingKey === key ? (
-                    <>
+                    <div className="flex items-center gap-2 flex-1">
                       <Input
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
@@ -436,9 +442,9 @@ export function Status() {
                       >
                         <X className="h-4 w-4" />
                       </Button>
-                    </>
+                    </div>
                   ) : (
-                    <>
+                    <div className="flex items-center gap-2 flex-1">
                       <code className="text-sm text-muted-foreground break-all flex-1">
                         {value}
                       </code>
@@ -446,7 +452,7 @@ export function Status() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleEdit(key, value)}
-                        className="h-7 w-7 p-0"
+                        className="h-7 w-7 p-0 shrink-0"
                       >
                         <Pencil className="h-3 w-3" />
                       </Button>
@@ -454,11 +460,11 @@ export function Status() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleDelete(key)}
-                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-destructive"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
-                    </>
+                    </div>
                   )}
                 </div>
               ))}

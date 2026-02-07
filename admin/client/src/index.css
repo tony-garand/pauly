@@ -113,6 +113,14 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+@media (max-width: 639px) {
+  [data-slot="card-content"],
+  [data-slot="card-header"] {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

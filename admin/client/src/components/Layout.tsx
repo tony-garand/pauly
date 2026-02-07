@@ -14,7 +14,7 @@ export function Layout() {
           <Separator orientation="vertical" className="mr-2 h-4" />
           <span className="text-sm text-muted-foreground">Pauly Admin Dashboard</span>
         </header>
-        <main className="flex-1 p-4">
+        <main className="flex-1 p-3 sm:p-4">
           <Outlet />
         </main>
       </SidebarInset>

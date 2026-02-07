@@ -512,6 +512,43 @@ export async function fetchRailwayDeployments() {
   return fetchApi<{ deployments: RailwayDeployment[] }>("/railway/deployments");
 }
 
+// Claude sessions
+export interface ClaudeProcess {
+  pid: number;
+  cpu: number;
+  mem: number;
+  uptime: string;
+  mode: "plan" | "execute" | "review" | "fix" | "task" | "unknown";
+}
+
+export interface ClaudeProjectGroup {
+  project: string;
+  path: string;
+  processes: ClaudeProcess[];
+  totalCpu: number;
+  totalMem: number;
+}
+
+export interface ClaudeSessionsResponse {
+  groups: ClaudeProjectGroup[];
+  totalProcesses: number;
+}
+
+export async function fetchClaudeSessions() {
+  return fetchApi<ClaudeSessionsResponse>("/pauly/sessions");
+}
+
+export async function killClaudeSession(pid: number) {
+  const response = await fetch(`${API_BASE}/pauly/sessions/${pid}/kill`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || `API error: ${response.status}`);
+  }
+  return response.json() as Promise<{ success: boolean }>;
+}
+
 // Claude prompt streaming
 export async function streamClaudePrompt(prompt: string): Promise<Response> {
   const response = await fetch(`${API_BASE}/pauly/claude`, {
