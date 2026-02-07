@@ -4,6 +4,7 @@ Web-based admin dashboard for monitoring and managing Pauly.
 
 ## Features
 
+- **Claude Terminal**: Send prompts to Claude from the dashboard with real-time streaming responses
 - **Status**: View scheduled job states and Pauly configuration
 - **Projects**: Browse projects with git status and task progress
 - **CLIs**: Check installed/missing CLI tools
@@ -95,3 +96,4 @@ pnpm typecheck
 | `GET /api/pauly/config` | Pauly configuration |
 | `GET /api/pauly/logs` | Available log files |
 | `GET /api/pauly/logs/:job` | Log file contents |
+| `POST /api/pauly/claude` | Stream Claude prompt response (SSE) |
