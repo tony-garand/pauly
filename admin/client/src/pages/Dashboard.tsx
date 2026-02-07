@@ -8,8 +8,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Loading } from "@/components/ui/loading";
 import { ErrorDisplay } from "@/components/ui/error";
 import {
@@ -19,19 +17,17 @@ import {
   CheckCircle2,
   XCircle,
   Activity,
-  Send,
-  Loader2,
 } from "lucide-react";
 import {
   fetchHealth,
   fetchClis,
   fetchProjects,
   fetchPaulyStatus,
-  createPaulyTask,
   type CliInfo,
   type ProjectInfo,
   type PaulyJob,
 } from "@/lib/api";
+import { ClaudeTerminal } from "@/components/ClaudeTerminal";
 
 export function Dashboard() {
   const [health, setHealth] = useState<string | null>(null);
@@ -40,9 +36,6 @@ export function Dashboard() {
   const [jobs, setJobs] = useState<PaulyJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [taskInput, setTaskInput] = useState("");
-  const [taskSubmitting, setTaskSubmitting] = useState(false);
-  const [taskMessage, setTaskMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -68,31 +61,6 @@ export function Dashboard() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleTaskSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const title = taskInput.trim();
-    if (!title) return;
-
-    setTaskSubmitting(true);
-    setTaskMessage(null);
-    try {
-      const result = await createPaulyTask(title);
-      setTaskInput("");
-      setTaskMessage({
-        type: "success",
-        text: `Task created (#${result.issueNumber || "?"})`,
-      });
-      setTimeout(() => setTaskMessage(null), 4000);
-    } catch (err) {
-      setTaskMessage({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to create task",
-      });
-    } finally {
-      setTaskSubmitting(false);
-    }
-  };
 
   if (loading) {
     return <Loading message="Loading dashboard..." />;
@@ -139,32 +107,8 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Quick Task Input */}
-      <Card>
-        <CardContent className="py-4">
-          <form onSubmit={handleTaskSubmit} className="flex gap-2">
-            <Input
-              placeholder="Create a task for Pauly..."
-              value={taskInput}
-              onChange={(e) => setTaskInput(e.target.value)}
-              disabled={taskSubmitting}
-              className="flex-1"
-            />
-            <Button type="submit" disabled={taskSubmitting || !taskInput.trim()} size="sm">
-              {taskSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </form>
-          {taskMessage && (
-            <p className={`text-xs mt-2 ${taskMessage.type === "success" ? "text-green-500" : "text-destructive"}`}>
-              {taskMessage.text}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {/* Claude Terminal */}
+      <ClaudeTerminal />
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

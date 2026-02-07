@@ -512,16 +512,16 @@ export async function fetchRailwayDeployments() {
   return fetchApi<{ deployments: RailwayDeployment[] }>("/railway/deployments");
 }
 
-// Pauly internal tasks
-export async function createPaulyTask(title: string, body?: string) {
-  const response = await fetch(`${API_BASE}/pauly/tasks`, {
+// Claude prompt streaming
+export async function streamClaudePrompt(prompt: string): Promise<Response> {
+  const response = await fetch(`${API_BASE}/pauly/claude`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, body }),
+    body: JSON.stringify({ prompt }),
   });
   if (!response.ok) {
     const data = await response.json();
     throw new Error(data.error || `API error: ${response.status}`);
   }
-  return response.json() as Promise<{ success: boolean; issueUrl: string; issueNumber?: number }>;
+  return response;
 }

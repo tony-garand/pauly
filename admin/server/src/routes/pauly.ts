@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType } from "express";
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import { getPaulyStatus, getSanitizedConfig, getLogContent, getAvailableLogs, PAULY_DIR } from "../lib/pauly.js";
 import { updateConfigValue, deleteConfigValue, getConfigValue } from "../lib/config.js";
 import { killAllClaudeProcesses } from "../lib/projects.js";
@@ -151,6 +151,71 @@ router.post("/tasks", (req, res) => {
       error: error.stderr || error.message || "Failed to create task",
     });
   }
+});
+
+// Claude prompt streaming endpoint
+router.post("/claude", (req, res) => {
+  const { prompt } = req.body;
+
+  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    res.status(400).json({ error: "Prompt is required" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  // Resolve claude binary path - needed because the server may run
+  // as a background process without ~/.local/bin in PATH
+  let claudeBin: string;
+  try {
+    claudeBin = execFileSync("which", ["claude"], { encoding: "utf-8" }).trim();
+  } catch {
+    claudeBin = (process.env.HOME || "") + "/.local/bin/claude";
+  }
+
+  req.socket.setTimeout(0);
+
+  const claude = spawn(claudeBin, [
+    "-p",
+    "--dangerously-skip-permissions",
+    prompt.trim(),
+  ], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, TERM: "dumb" },
+  });
+
+  claude.stdout.on("data", (data: Buffer) => {
+    const text = data.toString();
+    res.write(`data: ${JSON.stringify({ type: "content", text })}\n\n`);
+  });
+
+  claude.stderr.on("data", (data: Buffer) => {
+    const text = data.toString();
+    res.write(`data: ${JSON.stringify({ type: "error", text })}\n\n`);
+  });
+
+  claude.on("close", (code) => {
+    if (code !== 0 && code !== null) {
+      res.write(`data: ${JSON.stringify({ type: "error", text: `Process exited with code ${code}` })}\n\n`);
+    }
+    res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+    res.end();
+  });
+
+  claude.on("error", (err) => {
+    res.write(`data: ${JSON.stringify({ type: "error", text: err.message })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+    res.end();
+  });
+
+  res.on("close", () => {
+    if (claude.exitCode === null && !claude.killed) {
+      claude.kill();
+    }
+  });
 });
 
 export default router;
