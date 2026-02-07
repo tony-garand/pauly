@@ -1269,7 +1269,7 @@ export function ProjectDetail() {
               {/* Log content */}
               {showDevLog && devStatus.log && (
                 <pre className="p-3 bg-muted rounded-lg text-xs font-mono overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">
-                  {devStatus.log.replace(/\x1b\[\d+m/g, "")}
+                  {devStatus.log.replace(new RegExp(String.fromCharCode(0x1b) + "\\[\\d+m", "g"), "")}
                 </pre>
               )}
             </div>

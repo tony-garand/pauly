@@ -96,7 +96,7 @@ export function CLIs() {
           setInstalling((prev) => ({ ...prev, [name]: "error" }));
         }
       }, 2000);
-    } catch (err) {
+    } catch {
       setInstalling((prev) => ({ ...prev, [name]: "error" }));
     }
   };
