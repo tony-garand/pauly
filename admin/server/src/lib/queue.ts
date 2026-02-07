@@ -162,7 +162,7 @@ export function nackJob(
     recordTaskMetric(job.task_type, 'failure', durationMs, taskData.projectName, errorMessage);
 
     // Add to dead-letter queue for potential retry
-    addFailedTask(job.task_type, job.task_data, errorMessage);
+    addFailedTask(job.task_type, JSON.parse(job.task_data || '{}'), errorMessage);
     return true;
   }
 

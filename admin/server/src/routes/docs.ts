@@ -1,8 +1,8 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from '../lib/openapi.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 /**
  * Serve Swagger UI

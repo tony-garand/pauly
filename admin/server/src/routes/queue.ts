@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   enqueueJob,
   dequeueJob,
@@ -13,7 +13,7 @@ import {
   updateJobPriority,
 } from '../lib/queue.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 /**
  * @route GET /api/queue/stats

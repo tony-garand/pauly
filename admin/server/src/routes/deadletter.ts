@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   listFailedTasks,
   getFailedTask,
@@ -10,7 +10,7 @@ import {
   getRetryableTasks,
 } from '../lib/deadletter.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 /**
  * @route GET /api/deadletter

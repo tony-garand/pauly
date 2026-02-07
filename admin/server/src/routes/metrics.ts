@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import {
   getMetricsSummary,
   getMetricsTimeline,
@@ -6,7 +6,7 @@ import {
   cleanupOldMetrics,
 } from '../lib/metrics.js';
 
-const router = Router();
+const router: RouterType = Router();
 
 /**
  * @route GET /api/metrics/summary
