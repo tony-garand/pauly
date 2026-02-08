@@ -6,7 +6,7 @@ _pauly_completions() {
     _init_completion || return
 
     # Main commands
-    local commands="run dev admin railway status logs tail enable disable test-email setup install config autofix queue doctor kill version help"
+    local commands="run dev admin tui railway status logs tail enable disable test-email setup install config autofix queue doctor kill version help"
 
     # Job names
     local jobs="summary git research tasks all"

@@ -16,6 +16,7 @@ _pauly() {
                 'run[Run a job manually]' \
                 'dev[Autonomous development mode]' \
                 'admin[Manage admin dashboard]' \
+                'tui[Interactive terminal dashboard]' \
                 'railway[Railway deployment commands]' \
                 'status[Show status of all scheduled jobs]' \
                 'logs[View logs]' \

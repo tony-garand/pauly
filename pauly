@@ -67,6 +67,7 @@ cmd_help() {
     echo -e "  ${BOLD}run${NC} <job> [-bg]  Run a job manually (summary, git, research, all)"
     echo -e "  ${BOLD}dev${NC} [opts]       Autonomous development mode"
     echo -e "  ${BOLD}admin${NC} [cmd]      Manage admin dashboard (start/stop/status)"
+    echo -e "  ${BOLD}tui${NC}              Interactive terminal dashboard"
     echo -e "  ${BOLD}railway${NC} [cmd]    Railway deployment commands"
     echo -e "  ${BOLD}status${NC}           Show status of all scheduled jobs"
     echo -e "  ${BOLD}logs${NC} [-f] [job]  View logs (-f to follow in real-time)"
@@ -1516,7 +1517,7 @@ cmd_install() {
 # Main
 # ==========================================
 
-case "${1:-help}" in
+case "${1:-tui}" in
     run)
         cmd_run "$2" "$3"
         ;;
@@ -1564,6 +1565,16 @@ case "${1:-help}" in
         ;;
     queue)
         cmd_queue "$2"
+        ;;
+    tui)
+        if [ -d "$SCRIPT_DIR/tui/dist" ]; then
+            exec node "$SCRIPT_DIR/tui/dist/index.js"
+        elif command -v tsx &> /dev/null; then
+            exec tsx "$SCRIPT_DIR/tui/src/index.tsx"
+        else
+            print_error "TUI not built. Run: cd ~/.pauly/tui && pnpm install && pnpm build"
+            exit 1
+        fi
         ;;
     doctor|health|check)
         cmd_doctor
