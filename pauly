@@ -1260,7 +1260,7 @@ cmd_dev() {
 
     local subcommand=""
     local dry_run=false
-    local max_iter=25
+    local max_iter=0
 
     # Parse global dev flags first
     while [[ $# -gt 0 ]]; do
@@ -1358,7 +1358,7 @@ cmd_dev() {
                 print_info "[DRY-RUN] Would run task mode:"
                 echo "  Task: ${task_desc:-<from file>}"
                 echo "  Branch: ${branch_name:-<auto>}"
-                echo "  Max iterations: $max_iter"
+                echo "  Max iterations: $([[ "$max_iter" -eq 0 ]] && echo "unlimited" || echo "$max_iter")"
                 echo "  Create PR: $([[ "$no_pr" = true ]] && echo "no" || echo "yes")"
                 exit 0
             fi

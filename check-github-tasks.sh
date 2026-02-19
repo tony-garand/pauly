@@ -167,7 +167,7 @@ process_github_dev_command() {
             ;;
 
         ""|run)
-            local iterations="${args:-25}"
+            local iterations="${args:-0}"
             "$SCRIPT_DIR/pauly" dev "$iterations" 2>&1
             ;;
 
@@ -178,7 +178,7 @@ process_github_dev_command() {
             echo "  dev init     - Issue body contains the project idea"
             echo "  dev task     - Issue body contains the task description"
             echo "  dev 10       - Run 10 iterations"
-            echo "  dev          - Run default iterations"
+            echo "  dev          - Run until complete (unlimited)"
             echo "  dev status   - Show development progress"
             return 1
             ;;

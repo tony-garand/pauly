@@ -542,7 +542,7 @@ $notes_content
 dev_loop() {
     load_dev_prompts
 
-    local max_iterations="${1:-25}"
+    local max_iterations="${1:-0}"
     local iteration=1
     local start_time=$(date +%s)
 
@@ -552,12 +552,20 @@ dev_loop() {
         echo ""
     fi
 
-    ts_echo "${GREEN}Starting development loop (max $max_iterations iterations)${NC}"
+    if [[ "$max_iterations" -gt 0 ]]; then
+        ts_echo "${GREEN}Starting development loop (max $max_iterations iterations)${NC}"
+    else
+        ts_echo "${GREEN}Starting development loop (unlimited)${NC}"
+    fi
     ts_echo "${CYAN}Loop: PLAN -> EXECUTE -> REVIEW -> FIX${NC}"
     echo ""
 
-    while [[ $iteration -le $max_iterations ]]; do
-        ts_echo "${GREEN}=== Iteration $iteration/$max_iterations ===${NC}"
+    while [[ "$max_iterations" -eq 0 ]] || [[ $iteration -le $max_iterations ]]; do
+        if [[ "$max_iterations" -gt 0 ]]; then
+            ts_echo "${GREEN}=== Iteration $iteration/$max_iterations ===${NC}"
+        else
+            ts_echo "${GREEN}=== Iteration $iteration ===${NC}"
+        fi
 
         # Check if all tasks are done
         if [[ -f "$TASK_FILE" ]]; then
@@ -648,7 +656,7 @@ dev_task() {
     local task_desc="$1"
     local branch_name="$2"
     local no_pr="$3"
-    local max_iter="${4:-25}"
+    local max_iter="${4:-0}"
     local task_file="$5"
 
     # Read task from file if specified
@@ -684,8 +692,12 @@ dev_task() {
     # Run iterations
     local iter=1
     local completed=false
-    while [[ $iter -le $max_iter ]]; do
-        ts_echo "${CYAN}[Task iteration $iter/$max_iter]${NC}"
+    while [[ "$max_iter" -eq 0 ]] || [[ $iter -le $max_iter ]]; do
+        if [[ "$max_iter" -gt 0 ]]; then
+            ts_echo "${CYAN}[Task iteration $iter/$max_iter]${NC}"
+        else
+            ts_echo "${CYAN}[Task iteration $iter]${NC}"
+        fi
 
         local task_prompt="You are working on a single isolated task.
 
