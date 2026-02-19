@@ -204,13 +204,16 @@ router.post("/claude", (req, res) => {
 
   req.socket.setTimeout(0);
 
+  // Strip CLAUDECODE to prevent nested session detection when admin server
+  // is running inside a Claude Code session
+  const { CLAUDECODE: _, ...cleanEnv } = process.env;
   const claude = spawn(claudeBin, [
     "-p",
     "--dangerously-skip-permissions",
     prompt.trim(),
   ], {
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, TERM: "dumb" },
+    env: { ...cleanEnv, TERM: "dumb" },
   });
 
   claude.stdout.on("data", (data: Buffer) => {

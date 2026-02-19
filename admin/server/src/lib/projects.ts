@@ -4,6 +4,12 @@ import { homedir } from "os";
 import { execFileSync, spawn } from "child_process";
 import { getConfigValue } from "./config.js";
 
+/** Strip CLAUDECODE env var to prevent nested session detection */
+function stripClaudeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { CLAUDECODE: _, ...rest } = env;
+  return rest;
+}
+
 export interface TaskItem {
   text: string;
   completed: boolean;
@@ -1210,7 +1216,7 @@ export function startDevProcess(projectName: string): { success: boolean; error?
   spawn("bash", ["-c", cmd], {
     detached: true,
     stdio: "ignore",
-    env: { ...process.env, PATH: envPath, TERM: "dumb" }
+    env: { ...stripClaudeEnv(process.env), PATH: envPath, TERM: "dumb" }
   }).unref();
 
   return { success: true };
@@ -1256,7 +1262,7 @@ Output format (no other text):
         cwd: projectPath,
         encoding: "utf-8",
         timeout: 120000, // 2 minute timeout
-        env: { ...process.env, TERM: "dumb" }
+        env: { ...stripClaudeEnv(process.env), TERM: "dumb" }
       });
 
       // Parse the tasks from Claude's output
@@ -1309,7 +1315,7 @@ Output format (no other text):
       spawn("bash", ["-c", cmd], {
         detached: true,
         stdio: "ignore",
-        env: { ...process.env, TERM: "dumb" }
+        env: { ...stripClaudeEnv(process.env), TERM: "dumb" }
       }).unref();
 
       issueJobs.set(jobId, { status: "success", output, tasks });
