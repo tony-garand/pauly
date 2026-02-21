@@ -792,9 +792,10 @@ CRITICAL: You are working on issue #$issue_number ONLY. Do not mix tasks from ot
 This task is ISOLATED to: $work_dir
 
 If this is a substantial project or feature:
-1. Create a TASKS.md file with a checklist of tasks to complete
-2. Create a CONTEXT.md file with project overview and commands
-3. Do NOT mark the task as done - just set up the plan
+1. Create a TASKS.md file in the ROOT of the working directory ($work_dir/TASKS.md) with a checklist of tasks to complete
+2. Create a CONTEXT.md file in the ROOT of the working directory ($work_dir/CONTEXT.md) with project overview and commands
+3. Do NOT put these files in a subdirectory like tasks/ - they MUST be at the project root
+4. Do NOT mark the task as done - just set up the plan
 
 If this is a simple task you can complete immediately:
 1. Execute it fully
